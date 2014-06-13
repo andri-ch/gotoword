@@ -2,6 +2,11 @@
 
 
 from storm.locals import *
+try:
+    import vim
+except ImportError:
+    print("vim python module can't be used outside vim editor "
+          "except if you install vimmock python module from PyPI.")
 
 
 __all__ = ['Keyword', 'Context', 'KeywordContext', 'get_server', 'initialize',
@@ -238,3 +243,36 @@ with :HelperSave.\nIf you don't want to save it, quit with :q\n\n \
 These lines can be deleted.''' % word
 
     return msg_no_keyword
+
+
+def helper_all_words(store, help_buffer):
+    '''called by a vim function with a similar name.'''
+
+    # reopen database connection
+    store._connection = store.get_database().connect()
+    # select only the keyword names
+    result = store.execute("SELECT name FROM keyword;")
+    # dump from generator into a list
+    l = result.get_all()
+    '''
+    Example:
+    >>> l
+    [(u'line',), (u'color',), (u'canvas',)]
+    '''
+    # the above is a list of two tuples, we create a list of strings
+    names = [t[0] for t in l]
+    '''
+    >>> names
+    [u'line', u'color', u'canvas']
+    '''
+    names.sort()
+    '''
+    >>> names
+    [u'canvas', u'color', u'line']
+    '''
+    vim.command("exe 'set noro'")                     # set noreadonly
+    #help_buffer[:] = "\t".join(names)
+    help_buffer[:] = names
+    vim.command("exe 'set ro'")
+
+    store.close()

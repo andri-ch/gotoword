@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# allow relative imports from modules not in system path, when this module is
+# allow relative imports from modules outside of system path, when this module is
 # executed as script:
 #if __name__ == '__main__' and __package__ is None:
 #    from os import sys, path
@@ -16,7 +16,8 @@ import inspect
 try:
     import vim
 except ImportError:
-    print("vim python module can't be used outside vim editor.")
+    print("vim python module can't be used outside vim editor "
+          "except if you install vimmock python module.")
 
 import unittest
 
@@ -60,8 +61,15 @@ DATABASE_PATH = os.path.expanduser("~/.vim/andrei_plugins/gotoword/gotoword/test
 
 class TestMain(unittest.TestCase):
     def setUp(self):
-        '''Create a test database.'''
         self.database_name = 'test.db'
+        # remove old test databases
+        try:
+            os.remove(self.database_name)
+        except OSError:
+            # file doesn't exist, that's what we want in the first place
+            pass
+
+        '''Create a test database.'''
         self.database = create_database("sqlite:" +
                                         os.path.join(DATABASE_PATH,
                                                      self.database_name))
@@ -88,7 +96,7 @@ class TestMain(unittest.TestCase):
         self.store.add(w1)
         self.store.commit()
         w2 = Keyword(u'unique')
-        w2.info = u'only when committing SQL engine can tell that'\
+        w2.info = u'only when committing the SQL engine can tell that'\
                   'your keyword is not unique'
         self.store.add(w2)
         with self.assertRaises(storm.exceptions.IntegrityError):
@@ -154,7 +162,10 @@ class TestMain(unittest.TestCase):
 
         #    self.copy_database_for_inspection(test_name + '.db')
         # get rid of database after every test
-        os.remove(self.database_name)
+        try:
+            os.remove(self.database_name)
+        except OSError:
+            print("there's no such file: %s" % self.database_name)
 
     def copy_database_for_inspection(self, test_name):
         '''Dump a copy of the database for inspection with other tools.'''
@@ -227,7 +238,7 @@ else:                                # when it is being imported
         store.add(word)
         store.commit()
 
-    print("Put words in variables.")
+    print("Retrieve keywords from DB and store them in variables.")
     canvas = store.find(Keyword, Keyword.name == u'canvas').one()
     color = store.find(Keyword, Keyword.name == u'color').one()
     test = store.find(Keyword, Keyword.name == u'test').one()
@@ -251,3 +262,4 @@ else:                                # when it is being imported
     canvas.contexts.add(python)
     color.contexts.add(kivy)
     store.commit()
+    # user at shell is required to call store.close() at the end.

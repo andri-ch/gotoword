@@ -19,7 +19,7 @@
 " TODO: write some more use cases
 " Mainly, you can use it as a quick reminder.
 " For example, when you're inside a document, you don't remember the 
-" meaning/all the details about a word/all implications for that work, but you 
+" meaning/all the details about a word/all implications for that word, but you 
 " did write something about it a while ago, so you can open up the note.
 "
 "
@@ -78,6 +78,12 @@ endif
 function! s:Initialize_gotoword()             
 " this function is run only once, it creates a helper_buffer, so helper_buffer 
 " should not be deleted(wiped) with :bwipe
+"if exists("g:gotoword_initialized")
+"  finish       " replace finish with the equivalent of python's pass kw
+"endif
+"let g:loaded_gotoword = 1
+
+
 
 python << EOF
 
@@ -459,38 +465,41 @@ if !exists("g:gotoword_initialized")
    call s:Initialize_gotoword() 
 endif
 
-python << EOF
-# python imports from vim functions run previously are still available, as 
-# well as the variables defined.
+python from gotoword import helper_all_words
+python helper_all_words(store, help_buffer)
 
-# reopen database connection
-store._connection = store.get_database().connect()
-# select only the keyword names
-result = store.execute("SELECT name FROM keyword;")
-# dump from generator into a list
-l = result.get_all()          
-'''
-Example:
->>> l
-[(u'line',), (u'color',), (u'canvas',)]
-''' 
-# the above is a list of two tuples, we create a list of strings
-names = [t[0] for t in l]
-'''
->>> names
-[u'line', u'color', u'canvas']
-'''
-names.sort()
-'''
->>> names
-[u'canvas', u'color', u'line']
-'''
-vim.command("exe 'set noro'")                     # set noreadonly
-#help_buffer[:] = "\t".join(names)
-help_buffer[:] = names
-vim.command("exe 'set ro'")                       # set noreadonly
-
-store.close()
-
-EOF
+"python << EOF
+"# python imports from vim functions run previously are still available, as 
+"# well as the variables defined.
+"
+"# reopen database connection
+"store._connection = store.get_database().connect()
+"# select only the keyword names
+"result = store.execute("SELECT name FROM keyword;")
+"# dump from generator into a list
+"l = result.get_all()
+"'''
+"Example:
+">>> l
+"[(u'line',), (u'color',), (u'canvas',)]
+"''' 
+"# the above is a list of two tuples, we create a list of strings
+"names = [t[0] for t in l]
+"'''
+">>> names
+"[u'line', u'color', u'canvas']
+"'''
+"names.sort()
+"'''
+">>> names
+"[u'canvas', u'color', u'line']
+"'''
+"vim.command("exe 'set noro'")                     # set noreadonly
+"#help_buffer[:] = "\t".join(names)
+"help_buffer[:] = names
+"vim.command("exe 'set ro'")
+"
+"store.close()
+"
+"EOF
 endfunction
