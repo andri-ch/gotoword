@@ -9,11 +9,14 @@
 "let g:loaded_gotoword = 1
 
 
+" SHORT DESCRIPTION
 " plugin that opens a help file in a separate buffer for the  word under 
 " cursor and displays information about it.
-" All this information is retrieved from a database.
+"
 " Usually the word belongs to a context, and same word can belong to different
 " contexts, so it can have a definition for each context it belongs to.
+"
+" All this information is retrieved from a database.
 "
 "WHAT IS IT USEFUL FOR?
 " TODO: write some more use cases
@@ -21,7 +24,8 @@
 " For example, when you're inside a document, you don't remember the 
 " meaning/all the details about a word/all implications for that word, but you 
 " did write something about it a while ago, so you can open up the note.
-"
+" This could be later extended to get info that others have written so that
+" you can benefit from it.
 "
 "
 "
