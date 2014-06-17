@@ -1,278 +1,132 @@
-#!/usr/bin/python
+### System libraries ###
+import os.path
+import sys
+
+### Third party libs ###
+from storm.locals import create_database, Store, Int, Unicode
 
 
-from storm.locals import *
+VIM_FOLDER = os.path.expanduser('~/.vim')
+# os.path.expanduser turns '~' into an absolute path, because os.path.abspath can't!
+PLUGINS_FOLDER = 'andrei_plugins'
+# PLUGINS_FOLDER can be any of "plugin", "autoload", etc.
+PLUGIN_NAME = 'gotoword'
+PYTHON_PACKAGE = 'gotoword'
+# plugin's database that holds all the keywords and their info
+DB_NAME = 'keywords.db'
+DATABASE = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, DB_NAME)
+
+### Own libraries ###
+# NOTICE
+# the python path when these lines are executed is the path of the currently
+# active buffer (vim.current.buffer) in which this code is executed
+# So, to import our own libs, we have to add them to python path.
+sys.path.insert(1, os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE))
+# Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
+from utils import *               # should be replaced by import utils
+import gotoword_state_machine
+
+### import special vim python library  ###
 try:
     import vim
+    # the vim module contains everything we need to interface with vim from
+    # python, but only when python is used in vim plugins.
+    # can't import vim in ipython, maybe with some tricks or by using vimmock PyPI module
 except ImportError:
+    # just for testing purposes
     print("vim python module can't be used outside vim editor "
           "except if you install vimmock python module from PyPI.")
+    try:
+        import vimmock
+        vimmock.patch_vim()
+    except ImportError:
+        print("you need to install vimmock if you want to import vim \n"
+              "python module outside of the vim environment: \n"
+              "sudo pip install vimmock")
+        sys.exit()
+
+    # now we can import a mockup of vim
+    import vim
+    # more patching because vimmock implements a minimal vim functionality
+    mock_buf = vim.current.buffer
+    # define attribute at runtime
+    mock_buf.name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
+    mock_win = vim.current.window
+    mock_win.buffer = mock_buf
+    # mimic vim commands like "exe 'set noro'"
+    vim.command = lambda x: ""
+
+    class mylist(list):
+        """
+        Mock up a list that always return the first element, the element
+        we want, no matter the key.
+        """
+        def __init__(self, arg=None):
+            if type(arg) is not list:
+                raise TypeError
+            super(list, self).__init__(arg)
+            self.li = arg
+
+        def __getitem__(self, key):
+            "implements self[key] functionality."
+            return self.li[0]
+
+        def __iter__(self):
+            "used by enumerate() or for loop, etc."
+            return self.li.__iter__()
+
+    vim.buffers = mylist([mock_buf])        # emulate a list of buffers
+    vim.windows = [mock_win]
 
 
-__all__ = ['Keyword', 'Context', 'KeywordContext', 'get_server', 'initialize',
-           'load_keywords_store', 'find_keyword', 'create_keyword',
-           'update_keyword_info', 'introduction_line']
 
+### MAIN ###
 
-def __dir__():
-    '''This method will be called by dir() and must return the list of
-    attributes. This defines the interface of this module.'''
-    return __all__
+database = create_database('sqlite:' + DATABASE)
+# Eg: DATABASE = 'sqlite:/home/andrei/.vim/andrei_plugins/gotoword/keywords.db'
+store = Store(database)
 
+help_window = None
+# create a help_buffer that will hold info retrieved from database, etc. but
+# prevent vim to create buffer in current working dir, by setting an explicit
+# path; this way, python imports from our own library are easier
+help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
+# help_buffer is created on the fly, it doesn't exist on disk, but we
+# specify a full path as its name
+# TODO: rename helper_buffer to gotoword_buffer
 
-class Keyword(Storm):
-    '''This is the model of a keyword.
-    Each instance of this class represents a row in the table 'keyword'
-    which should exist or be created.
-    It must inherit object base class or, for advanced use, Storm.
-    All involved classes should inherit Storm too, if you want to define
-    references at class definition time, using a stringified version of
-    class.property.
+# find and store the help window's index for further reference to it
+# if the user needs help on other words, you just change the window buffer
+# or, update the current buffer, so help_window might not be needed
+for win in vim.windows:
+    if win.buffer.name == help_buffer_name:
+        # if already there is a window which displays the help buffer
+        help_window = win
+        #win.buffer.append("Help window: %s" % help_window)
 
-    __storm_table__  - table in an SQL database(sqlite, etc.)
-    id - is db specific, for indexing
-    name - is the keyword itself, like "button", etc; it should be unique in DB
-    cmd - will be run to obtain info about the keyword, like reading a man page,
-    info - usually an user edited field, this is where the user personalizes
-           the definition.
+if not help_window:
+    try:
+    # open the andrei_help buffer in a new window
+    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
+    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
+        # opens file in same win
+        vim.command("exe 'split %s'" % help_buffer_name)
+        #vim.command("exe 'set readonly'")                   # or 'set ro'
+        # by setting buffer readonly, we want user to prevent from saving it
+        # on harddisk with :w cmd, instead we want user to update the
+        # database with HelperUpdate vim cmd or HelperSave
+    except vim.error:
+        print("can't create %s buffer, it already exists." % help_buffer_name)
 
-    to learn faster, enable debugging:
-    >>> import sys
-    >>> from storm.tracer import debug
-    >>> debug(True, stream=sys.stdout)
-    to disable, do
-    >>> debug(False)
-
-    >>> from storm.locals import *
-    create or open an existing db
-    >>> database = create_database("sqlite:keyword.db")
-    On linux, use 'sqlitebrowser' utility to graphically browse the db.
-    >>> store = Store(database)
-    create the table which will hold instances of Keyword class
-    >>> store.execute("CREATE TABLE keyword "
-                      "(id INTEGER PRIMARY KEY, name VARCHAR not NULL, cmd VARCHAR, info VARCHAR)")
-    define a keyword to add to the table
-    >>> keyword1 = Keyword(name=u'canvas')
-    >>> keyword1.info = u"Define a canvas section in which you can add Graphics instructions that define how the widget is rendered."
-    >>> store.add(keyword1)
-    find a keyword with a known name:
-    >>> keyword = store.find(Keyword, Keyword.name == u'canvas').one()
-    save all stuff
-    >>> store.commit()
-    '''
-    __storm_table__ = "keyword"
-    id = Int(primary=True)
-    name = Unicode()
-    cmd = Unicode()
-    info = Unicode()
-    # many-to-many relationship, from keyword's point of view
-    contexts = ReferenceSet("Keyword.id",
-                            "KeywordContext.keyword_id",
-                            "KeywordContext.context_id",
-                            "Context.id")
-    # keywords can have no contexts whatsoever
-
-    def __init__(self, name):
-        self.name = name
-
-    @classmethod
-    def create_table(cls, store):
-        '''Create the database table according to class properties.'''
-        # subclasses that will use this method, will call it with their
-        # own __storm_table__
-        store.execute("CREATE TABLE IF NOT EXISTS %s (id INTEGER "
-                      "PRIMARY KEY, name VARCHAR UNIQUE NOT NULL,"
-                      "cmd VARCHAR, info VARCHAR)" % cls.__storm_table__)
-        store.commit()
-
-    #def get_all_keywords():
-    #    # TODO: get all from table keywords and represent them nicely
-    #    pass
-
-
-class Context(Storm):
-    '''Keywords have different definitions depending on the context.
-    To create the corresponding DB table, for sqlite:
-    >>> store.execute("CREATE TABLE context (id INTEGER PRIMARY KEY, name VARCHAR)")
-    '''
-    __storm_table__ = "context"
-    id = Int(primary=True)
-    name = Unicode()
-    #description = Unicode()
-
-    # implement many-to-many reference: context has multiple keywords
-    # and keywords have multiple contexts. Get all keywords in context:
-    keywords = ReferenceSet("Context.id",
-                            "KeywordContext.context_id",
-                            "KeywordContext.keyword_id",
-                            "Keyword.id")
-
-    def __init__(self, name):
-        self.name = name
-
-    @classmethod
-    def create_table(cls, store):
-        '''Context.create_table or Context(u'a_context').create_table'''
-        #store.execute("CREATE TABLE IF NOT EXISTS %s (id INTEGER PRIMARY KEY, "
-        #              "name VARCHAR UNIQUE NOT NULL, description VARCHAR)" %
-        #              cls.__storm_table__)
-        store.execute("CREATE TABLE IF NOT EXISTS %s (id INTEGER PRIMARY KEY, "
-                      "name VARCHAR UNIQUE NOT NULL)" %
-                      cls.__storm_table__)
-        store.commit()
-
-    @classmethod
-    def find_context(cls, store, name):
-        # TODO: you might need to make same abstract class for Keyword & for
-        # Content (they might be polimorphic), same methods are used.
-        res = store.find(cls, cls.name == name).one()
-        return res
-
-    #@classmethod
-    #def new_context(cls, store, name,
-
-    # TODO: def get_all():
-
-
-class KeywordContext(Storm):
-    '''Helps in creating a many-to-many relationship.
-    To create it in DB use:
-    >>> store.execute("CREATE TABLE keyword_context(context_id INTEGER,"
-                      "keyword_id INTEGER, PRIMARY KEY (context_id, keyword_id))")
-    Notice the syntax for a composed primary key
-    '''
-    __storm_table__ = "keyword_context"
-    # create a composed key
-    __storm_primary__ = "context_id", "keyword_id"
-    context_id = Int()
-    keyword_id = Int()
-
-    @classmethod
-    def create_table(cls, store):
-        store.execute("CREATE TABLE IF NOT EXISTS %s(context_id INTEGER,"
-                      "keyword_id INTEGER, PRIMARY KEY (context_id, "
-                      "keyword_id))" % cls.__storm_table__)
-        store.commit()
-
-
-def get_server():
-    """Return a server daemon connection or start one """
-    # might not be needed anymore
-    pass
-
-
-def initialize(database):
-    '''This should be run only once, to create the db, maybe when the script
-    is installed. It can populate the db if needed, or the install script
-    copy the default db.
-
-    database - check the docs for load_keywords_store function.'''
-
-    store = load_keywords_store(database)
-    # create table according to Keyword class:
-    store.execute("CREATE TABLE keyword (id INTEGER PRIMARY KEY,"
-                  "name VARCHAR not NULL, cmd VARCHAR, info VARCHAR)")
-    return store
-
-
-def load_keywords_store(database):
-    '''Creates a connection to the database and loads all keywords.
-    Probably, it should first identify the context, and load the keywords
-    from that context, not all keywords in db.
-    This function should be ran when the plugin is loaded.
-
-    database - a string of the form SCHEME:PATH where:
-         scheme - sqlite, postgresql, mysql, etc.
-         path - it can be an absolute path.
-             eg. '/home/user1/data.db' or 'data.db' for file in current dir.
-    '''
-    database = create_database(database)
-    store = Store(database)
-    return store
-
-
-def find_keyword(store, word):
-    '''Searches the database for the word.'''
-    # find all matches
-    #keywords = store.find(Keyword, Keyword.name == word)
-
-    # return first match
-    keyword = store.find(Keyword, Keyword.name == word).one()
-    return keyword
-
-
-def create_keyword(store, word, buf):
-    '''Creates a new keyword with name=word and updates the database.
-    Workflow:
-    with cursor on the word that will become a keyword,
-    user calls vim function Helper-create, which opens an empty helper_buffer or
-    empties the one already open.
-    User edits the buffer with info he wants to store as keyword.info or keyword.cmd
-    User saves the contents of the buffer to database by calling HelperSaveCmd or
-    HelperSaveInfo which are aliases to HelperSave(flag).
-    '''
-    keyword = Keyword(name=word)
-    keyword = store.add(keyword)
-    update_keyword_info(store, keyword, buf)
-    return keyword
-
-
-def update_keyword_info(store, keyword, buf):
-    '''Commits to database the contents from helper buffer. Maybe it
-    should detect if changes from original exist.
-    buf  -> a vim buffer'''
-    lines = buf[:]
-    buf_content = "\n".join(lines)
-    # storm stores content to db as unicode
-    buf_content = unicode(buf_content)
-    keyword.info = buf_content
-    #store.find(Keyword, Keyword.name == keyword.name).set(info=buf_content)
-    # write to DB file
-    store.commit()
-    return keyword
-
-
-def introduction_line(word):
-    '''Constructs a text message.
-    It could use an argument to decide which message to return.'''
-
-    msg_no_keyword = '''The keyword "%s" doesn't exist in the database. Would \
-you like to add info about it?\nEdit text with \
-usual vim commands, but save it to this plugin's database, for future use, \
-with :HelperSave.\nIf you don't want to save it, quit with :q\n\n \
-These lines can be deleted.''' % word
-
-    return msg_no_keyword
-
-
-def helper_all_words(store, help_buffer):
-    '''called by a vim function with a similar name.'''
-
-    # reopen database connection
-    store._connection = store.get_database().connect()
-    # select only the keyword names
-    result = store.execute("SELECT name FROM keyword;")
-    # dump from generator into a list
-    l = result.get_all()
-    '''
-    Example:
-    >>> l
-    [(u'line',), (u'color',), (u'canvas',)]
-    '''
-    # the above is a list of two tuples, we create a list of strings
-    names = [t[0] for t in l]
-    '''
-    >>> names
-    [u'line', u'color', u'canvas']
-    '''
-    names.sort()
-    '''
-    >>> names
-    [u'canvas', u'color', u'line']
-    '''
-    vim.command("exe 'set noro'")                     # set noreadonly
-    #help_buffer[:] = "\t".join(names)
-    help_buffer[:] = names
-    vim.command("exe 'set ro'")
-
-    store.close()
+"""
+map buffer names to vim.buffers indices for easier access from python
+(indices differ when compared to vim buffers' indices, but the name is the
+same, so we need to access buffers by name)
+"""
+py_buffers = {}
+for index, b in enumerate(vim.buffers):
+    py_buffers[b.name] = index + 1
+    # vim indexing starts from 1, but index starts from 0
+    # >>> print(py_buffers)
+    #{'/home/andrei/.vim/andrei_plugins/andrei_helper': 1, '/home/andrei/bash_exp/-MiniBufExplorer-': 2, '/home/andrei/bash_exp/sugarsync.kv': 0}
+help_buffer = vim.buffers[py_buffers[help_buffer_name]]

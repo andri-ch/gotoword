@@ -14,10 +14,12 @@ import shutil
 import inspect
 
 try:
+    import vimmock
+    vimmock.patch_vim()
     import vim
 except ImportError:
     print("vim python module can't be used outside vim editor "
-          "except if you install vimmock python module.")
+          "except if you install vimmock python module from PyPI.")
 
 import unittest
 
@@ -26,6 +28,8 @@ import storm
 
 ### Own libraries ###
 from gotoword import *
+# TODO: get rid of this; you should do: import gotoword; that's it, like import
+# django
 
 # Beware, relative imports don't work when this file is called:
 # $ python test.py
@@ -262,4 +266,5 @@ else:                                # when it is being imported
     canvas.contexts.add(python)
     color.contexts.add(kivy)
     store.commit()
+
     # user at shell is required to call store.close() at the end.

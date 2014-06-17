@@ -57,7 +57,6 @@
 " simultaneously:
 " http://www.vim.org/scripts/script.php?script_id=1238
 "
-"TODO: create a function to list all keywords in db in the help_buffer
 "TODO: figure out how to change Keyword class in order to introduce contexts
 " figure how if context is a table with different context columns, if it's a
 " one to many or many to one relation, etc.
@@ -71,129 +70,29 @@ if !has('python')
     finish                             " like python's sys.exit()
 endif
 
-" production mode
-" function s:Initialize_gotoword(word)              
-" fct name always starts with uppercase
-" development mode
 function! s:Initialize_gotoword()             
-" this function is run only once, it creates a helper_buffer, so helper_buffer 
-" should not be deleted(wiped) with :bwipe
-"if exists("g:gotoword_initialized")
-"  finish       " replace finish with the equivalent of python's pass kw
-"endif
-"let g:loaded_gotoword = 1
+    " s: means function is local to script, not part of the global namespace
+    " this function is run only once, it creates a helper_buffer, so helper_buffer 
+    " should not be deleted(wiped) with :bwipe
 
+    "if exists("g:gotoword_initialized")
+    "  finish       " replace finish with the equivalent of python's pass kw
+    "endif
 
-
-python << EOF
-
-### System libraries ###
-import os.path
-import sys
-import vim
-# the vim module contains everything we need to interface with vim from
-# python, but only when python is used in vim plugins. 
-# can't import vim in ipython, maybe with some tricks
-
-VIM_FOLDER = os.path.expanduser('~/.vim')
-# os.path.expanduser turns '~' into an absolute path, because os.path.abspath can't!
-PLUGINS_FOLDER = 'andrei_plugins'
-# PLUGINS_FOLDER can be any of "plugin", "autoload", etc. 
-PLUGIN_NAME = 'gotoword'
-PYTHON_PACKAGE = 'gotoword'
-# plugin's database that holds all the keywords and their info
-DB_NAME = 'keywords.db'
-DATABASE = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, DB_NAME)
-
-### Third party libs ###
-from storm.locals import create_database, Store, Int, Unicode
-
-### Own libraries ###
-# NOTICE
-# the python path when these lines are executed is the path of the currently 
-# active buffer (vim.current.buffer) in which this code is executed, NOT the 
-# path of this vim script.
-# So, to import our own libs, we have to add them to python path.
-sys.path.insert(1, os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE))
-# Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
-from gotoword import *
-import gotoword_state_machine
-
-
-### MAIN ### 
-
-database = create_database('sqlite:' + DATABASE)
-# Eg: DATABASE = 'sqlite:/home/andrei/.vim/andrei_plugins/gotoword/keywords.db'
-store = Store(database)
-
-help_window = None
-# create a help_buffer that will hold info retrieved from database, etc.
-#help_buffer = os.path.join(os.getcwd(), "andrei_helper")
-# prevent vim to create buffer in current working dir, by setting an explicit 
-# path; this way, python imports from our own library are easier
-help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
-# help_buffer is created on the fly, it doesn't exist on disk, but we 
-# specify a full path as its name
-
-# find and store the help window's index for further reference to it
-# if the user needs help on other words, you just change the window buffer
-# or, update the current buffer, so help_window might not be needed
-for win in vim.windows:
-    if win.buffer.name == help_buffer_name:
-        # if already there is a window which displays the help buffer
-        help_window = win
-        #win.buffer.append("Help window: %s" % help_window)   
-
-if not help_window:
-    try:
-    # open the andrei_help buffer in a new window
-    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
-    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
-        # opens file in same win
-        vim.command("exe 'split %s'" % help_buffer_name) 
-        #vim.command("exe 'set readonly'")                   # or 'set ro'
-        # by setting buffer readonly, we want user to prevent from saving it 
-        # on harddisk with :w cmd, instead we want user to update the 
-        # database with HelperUpdate vim cmd or HelperSave
-    except vim.error:
-        print("can't create %s buffer, it already exists." % help_buffer_name)
-
-"""
-map buffer names to vim.buffers indices for easier access from python 
-(indices differ when compared to vim buffers' indices, but the name is the 
-same, so we need to access buffers by name)
-"""
-py_buffers = {}
-for index, b in enumerate(vim.buffers):
-    py_buffers[b.name] = index + 1
-    # vim indexing starts from 1, but index starts from 0
-    # >>> print(py_buffers)
-    #{'/home/andrei/.vim/andrei_plugins/andrei_helper': 1, '/home/andrei/bash_exp/-MiniBufExplorer-': 2, '/home/andrei/bash_exp/sugarsync.kv': 0}
-
-help_buffer = vim.buffers[py_buffers[help_buffer_name]]
-# help_buffer should
-EOF
-
-let g:gotoword_initialized = 1
+    python import gotoword                  " python gotoword.main(), etc.
+    let g:gotoword_initialized = 1
 endfunction
 
 
-
 if !exists(":Helper")
-  " development mode
-  command -nargs=0 Helper call Help_buffer(expand("<cword>"))
-  " production mode
-  "command -nargs=0 Helper call s:Help_buffer(expand("<cword>"))
+  command -nargs=0 Helper call s:Help_buffer(expand("<cword>"))
 endif
 " We define the command :Helper to call the function Help_buffer. 
 " The -nargs argument states how many arguments the command will take.
 " :call Help_buffer(expand("<cword>"))   " call fct with word under the cursor 
 
 
-" production mode
-"function s:Help_buffer(word)              " fct name always starts with uppercase
-" development mode
-function! Help_buffer(word)              " fct name always starts with uppercase
+function! s:Help_buffer(word)              " fct name always starts with uppercase
 
 call s:Initialize_gotoword() 
 
@@ -237,22 +136,15 @@ endfunction
 
 
 if !exists(":HelperSave")
-  " developer mode
-  "command -nargs=0 HelperSave call Helper_save()
-  command -nargs=? HelperSave call Helper_save(<f-args>)   
+  command -nargs=? HelperSave call s:Helper_save(<f-args>)   
   " ? means zero or one argument
-  " production mode
-  "command -nargs=? HelperSave call s:Help_save()
 endif
 
 " This command saves to DB the helper buffer, which should already exist
 " Eg. :HelperSave            - keyword is in db, so context is known
 "     :HelperSave kivy       - create new keyword, kivy is the context
 
-" production mode
-"function s:Helper_save()              " fct name always starts with uppercase
-" development mode
-function! Helper_save(...)             " fct has a variable number of args
+function! s:Helper_save(...)             " fct has a variable number of args
     " To redefine a function that already exists, use the ! 
     " This way, we reload for each subsequent function call
     if !exists("g:loaded_Help_buffer")
@@ -283,7 +175,7 @@ gotoword_state_machine.m.set_start("Start")
 # get first positional argument
 try:
     context = vim.eval("a:1")
-    context = unicode(context)
+    context = unicode(context).lower()
 except vim.error:
     context = ''
 
@@ -389,17 +281,11 @@ endfunction
 
 
 if !exists(":HelperDelete")
-  " developer mode
-  command -nargs=0 HelperDelete call Helper_delete()
-  " production mode
-  "command -nargs=0 HelperDelete call s:Helper_delete()
+  command -nargs=0 HelperDelete call s:Helper_delete()
 endif
 
 
-" production mode
-"function s:Helper_delete()
-" development mode
-function! Helper_delete()
+function! s:Helper_delete()
 " TODO: should take optional positional arguments indicating the context
 " One could delete the definition for one context while keeping the others
 
@@ -444,62 +330,21 @@ endfunction
 
 
 if !exists(":HelperAllWords")
-  " developer mode
-  command -nargs=0 HelperAllWords call Helper_all_words()
-  " production mode
-  "command -nargs=0 HelperAllWords call s:Helper_all_words()
+  command -nargs=0 HelperAllWords call s:Helper_all_words()
 endif
 
+function! s:Helper_all_words()
+    " this function displays all keywords from DB in help_buffer, sorted in 
+    " alphabetical order
+    
+    " TODO: should take optional positional arguments indicating the context
+    " like Helper_all_words('python') to display all words in python context
 
-" production mode
-"function s:HelperAllWords()
-" development mode
-function! Helper_all_words()
-" this function displays all keywords from DB in help_buffer, sorted in 
-" alphabetical order
+    if !exists("g:gotoword_initialized")
+       call s:Initialize_gotoword() 
+    endif
+    
+    python from gotoword import helper_all_words          " TODO: import from gotoword once
+    python helper_all_words(store, help_buffer)
 
-" TODO: should take optional positional arguments indicating the context
-" like Helper_all_words('python') to display all words in python context
-
-if !exists("g:gotoword_initialized")
-   call s:Initialize_gotoword() 
-endif
-
-python from gotoword import helper_all_words
-python helper_all_words(store, help_buffer)
-
-"python << EOF
-"# python imports from vim functions run previously are still available, as 
-"# well as the variables defined.
-"
-"# reopen database connection
-"store._connection = store.get_database().connect()
-"# select only the keyword names
-"result = store.execute("SELECT name FROM keyword;")
-"# dump from generator into a list
-"l = result.get_all()
-"'''
-"Example:
-">>> l
-"[(u'line',), (u'color',), (u'canvas',)]
-"''' 
-"# the above is a list of two tuples, we create a list of strings
-"names = [t[0] for t in l]
-"'''
-">>> names
-"[u'line', u'color', u'canvas']
-"'''
-"names.sort()
-"'''
-">>> names
-"[u'canvas', u'color', u'line']
-"'''
-"vim.command("exe 'set noro'")                     # set noreadonly
-"#help_buffer[:] = "\t".join(names)
-"help_buffer[:] = names
-"vim.command("exe 'set ro'")
-"
-"store.close()
-"
-"EOF
 endfunction
