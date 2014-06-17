@@ -82,7 +82,7 @@ function! s:Initialize_gotoword()
     "  finish       " replace finish with the equivalent of python's pass kw
     "endif
 
-    python from gotoword import gotoword                  
+    python from gotoword import gotoword, utils
     "or  python gotoword.main(), etc.
     let g:gotoword_initialized = 1
 endfunction
@@ -98,43 +98,17 @@ endif
 
 function! s:Help_buffer(word)              " fct name always starts with uppercase
 
-call s:Initialize_gotoword() 
+    call s:Initialize_gotoword() 
 
 python << EOF
-
 # get function argument
-word = vim.eval("a:word")            # get argument by name
-# word = vim.eval("a:1")             # get argument by position (first one)
+word = gotoword.vim.eval("a:word")      # get argument by name
+# word = vim.eval("a:1")                # get argument by position (first one)
 
-# make it unicode, for python2.x, this is what is stored in the db
-word = unicode(word)
-# make it case-insensitive
-word = word.lower()
-# look for keyword in DB
-keyword = find_keyword(store, word)
-
-if keyword:
-    # load content in buffer, previous content is deleted
-    help_buffer[:] = keyword.info.splitlines()
-    vim.command("exe 'set readonly'")                   # or 'set ro'
-else:
-    # keyword doesn't exist, prepare buffer to be filled with user content
-    vim.command("exe 'set noro'")                       # set noreadonly
-    # write to buffer the small help text
-    help_buffer[:] = introduction_line(word).splitlines()
-    vim.command("exe 'set readonly'")                   # or 'set ro'
-    # .splitlines() is used because vim buffer accepts at most one "\n" 
-    # per vim line
-
-### DEBUG ###
-#help_buffer.append("%s" % help_buffer)
-###
-
-# close database connection
-store.close()
+gotoword.update_help_buffer(word)
 EOF
 
-let g:loaded_Help_buffer = 1
+    let g:loaded_Help_buffer = 1
 endfunction
 
 

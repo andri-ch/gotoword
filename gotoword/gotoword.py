@@ -23,7 +23,7 @@ DATABASE = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, DB_NAME)
 # So, to import our own libs, we have to add them to python path.
 sys.path.insert(1, os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE))
 # Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
-from utils import *               # should be replaced by import utils
+import utils               # should be replaced by import utils
 import gotoword_state_machine
 
 ### import special vim python library  ###
@@ -79,10 +79,9 @@ except ImportError:
     vim.windows = [mock_win]
 
 
-
 ### MAIN ###
 
-database = create_database('sqlite:' + DATABASE)
+database = utils.create_database('sqlite:' + DATABASE)
 # Eg: DATABASE = 'sqlite:/home/andrei/.vim/andrei_plugins/gotoword/keywords.db'
 store = Store(database)
 
@@ -130,3 +129,32 @@ for index, b in enumerate(vim.buffers):
     # >>> print(py_buffers)
     #{'/home/andrei/.vim/andrei_plugins/andrei_helper': 1, '/home/andrei/bash_exp/-MiniBufExplorer-': 2, '/home/andrei/bash_exp/sugarsync.kv': 0}
 help_buffer = vim.buffers[py_buffers[help_buffer_name]]
+
+
+def update_help_buffer(word):
+    # make it unicode, for python2.x, this is what is stored in the db
+    word = unicode(word)
+    # make it case-insensitive
+    word = word.lower()
+    # look for keyword in DB
+    keyword = utils.find_keyword(store, word)
+
+    if keyword:
+        # load content in buffer, previous content is deleted
+        help_buffer[:] = keyword.info.splitlines()
+        vim.command("exe 'set readonly'")                   # or 'set ro'
+    else:
+        # keyword doesn't exist, prepare buffer to be filled with user content
+        vim.command("exe 'set noreadonly'")                 # or 'set noro'
+        # write to buffer the small help text
+        help_buffer[:] = utils.introduction_line(word).splitlines()
+        vim.command("exe 'set readonly'")                   # or 'set ro'
+        # .splitlines() is used because vim buffer accepts at most one "\n"
+        # per vim line
+
+    ### DEBUG ###
+    #help_buffer.append("%s" % help_buffer)
+    ###
+
+    # close database connection
+    store.close()
