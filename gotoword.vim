@@ -1,5 +1,5 @@
 " Vim global plugin for displaying info about the word under cursor
-" Last Change:	2014 Ian 18
+" Last Change:	2014 June 17
 " Maintainer:	Andrei Chiver  <andreichiver@gmail.com>
 " License:	This file is placed in the public domain.
 
@@ -9,12 +9,15 @@
 "let g:loaded_gotoword = 1
 
 
+" SHORT DESCRIPTION
 " plugin that opens a help file in a separate buffer for the  word under 
 " cursor and displays information about it.
-" All this information is retrieved from a database.
+"
 " Usually the word belongs to a context, and same word can belong to different
 " contexts, so it can have a definition for each context it belongs to.
 "
+" All this information is retrieved from a database.
+
 "WHAT IS IT USEFUL FOR?
 " TODO: write some more use cases
 " Mainly, you can use it as a quick reminder.
@@ -79,7 +82,8 @@ function! s:Initialize_gotoword()
     "  finish       " replace finish with the equivalent of python's pass kw
     "endif
 
-    python import gotoword                  " python gotoword.main(), etc.
+    python from gotoword import gotoword                  
+    "or  python gotoword.main(), etc.
     let g:gotoword_initialized = 1
 endfunction
 
