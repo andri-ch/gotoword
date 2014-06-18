@@ -18,7 +18,7 @@
 "
 " All this information is retrieved from a database.
 
-"WHAT IS IT USEFUL FOR?
+" WHAT IS IT USEFUL FOR?
 " TODO: write some more use cases
 " Mainly, you can use it as a quick reminder.
 " For example, when you're inside a document, you don't remember the 
@@ -73,45 +73,15 @@ if !has('python')
     finish                             " like python's sys.exit()
 endif
 
-function! s:Initialize_gotoword()             
-    " s: means function is local to script, not part of the global namespace
-    " this function is run only once, it creates a helper_buffer, so helper_buffer 
-    " should not be deleted(wiped) with :bwipe
 
-    "if exists("g:gotoword_initialized")
-    "  finish       " replace finish with the equivalent of python's pass kw
-    "endif
-
-    python from gotoword import gotoword, utils
-    "or  python gotoword.main(), etc.
-    let g:gotoword_initialized = 1
-endfunction
-
-
+" COMMANDS
+"
 if !exists(":Helper")
   command -nargs=0 Helper call s:Help_buffer(expand("<cword>"))
 endif
 " We define the command :Helper to call the function Help_buffer. 
 " The -nargs argument states how many arguments the command will take.
 " :call Help_buffer(expand("<cword>"))   " call fct with word under the cursor 
-
-
-function! s:Help_buffer(word)              " fct name always starts with uppercase
-
-    call s:Initialize_gotoword() 
-
-python << EOF
-# get function argument
-word = gotoword.vim.eval("a:word")      # get argument by name
-# word = vim.eval("a:1")                # get argument by position (first one)
-
-gotoword.update_help_buffer(word)
-EOF
-
-    let g:loaded_Help_buffer = 1
-endfunction
-
-
 
 if !exists(":HelperSave")
   command -nargs=? HelperSave call s:Helper_save(<f-args>)   
@@ -122,6 +92,50 @@ endif
 " Eg. :HelperSave            - keyword is in db, so context is known
 "     :HelperSave kivy       - create new keyword, kivy is the context
 
+if !exists(":HelperDelete")
+  command -nargs=0 HelperDelete call s:Helper_delete()
+endif
+
+" TODO: create a HelperDeleteContext and/or HelperDefineContext or
+" HelperContext delete/new/list         new or save or add; which one?
+if !exists(":HelperAllWords")
+  command -nargs=0 HelperAllWords call s:Helper_all_words()
+endif
+
+
+
+" FUNCTIONS
+"
+function! s:Initialize_gotoword()             
+    " s: means function is local to script, not part of the global namespace
+    " this function is run only once, it creates a helper_buffer, so helper_buffer 
+    " should not be deleted(wiped) with :bwipe
+
+    "if exists("g:gotoword_initialized")
+    "  finish       " replace finish with the equivalent of python's pass kw
+    "endif
+
+    python from gotoword import gotoword, utils
+    " or  python gotoword.main(), etc.
+    let g:gotoword_initialized = 1
+endfunction
+
+
+function! s:Help_buffer(word)              " fct name always starts with uppercase
+    call s:Initialize_gotoword() 
+
+python << EOF
+# get function argument
+word = gotoword.vim.eval("a:word")      # get argument by name
+# word = vim.eval("a:1")                # get argument by position (first one)
+
+keyword = gotoword.update_help_buffer(word)
+EOF
+
+    let g:loaded_Help_buffer = 1
+endfunction
+
+
 function! s:Helper_save(...)             " fct has a variable number of args
     " To redefine a function that already exists, use the ! 
     " This way, we reload for each subsequent function call
@@ -131,136 +145,19 @@ function! s:Helper_save(...)             " fct has a variable number of args
     endif
 
 python << EOF
-
-# python imports from vim functions run previously are still available, as 
+# python imports from vim functions run previously are still available, as
 # well as the variables defined.
-
-# this function, if called twice on same keyword(first edit, then an update) 
-# should know that it doesn't need to create another keyword, just to update
-
-# reopen database connection
-store._connection = store.get_database().connect()
-
-# initialize state machine to handle case 00
-
-#m = gotoword_state_machine.StateMachine()
-#m.add_state("Start", start_transitions)
-#m.add_state("read_context_state", read_context_transitions)
-#m.add_state("end_state", end_state, end_state=1)
-gotoword_state_machine.m.set_start("Start")
-#m.run('start')
-
-# get first positional argument
 try:
-    context = vim.eval("a:1")
+    # get first positional argument
+    context = gotoword.vim.eval("a:1")
     context = unicode(context).lower()
 except vim.error:
     context = ''
 
-### debug ###
-if not context:
-    print("context is empty")
-    gotoword_state_machine.m.run('start')
-else:
-    print("context is %s" % context)
-
-#if context:
-#    # context was specified by the user, so look it up in DB
-#    ctx = Context.find_context(context)
-#    # if context not in DB, ctx will be None, create a new context
-#    if !ctx:
-#        context = Context(name=context)
-#else:
-#    pass
-
-### ALL COMBINATIONS ###
-# from the user's point of view - what he types when he executes :HelperSave [context]
-# [context] is optional
-
-# keyword doesn't exist, context doesn't exist                                             0 0
-    # Do you want to specify a context? 
-        # abort [a]
-        # yes -> create keyword with context   1
-        # no -> create keyword with no context 0
-
-
-# keyword doesn't exist, context exists                                                    0 1
-    # context exists in db, do you want to create keyword with context?    1
-        # yes -> create keyword with context [default yes]       1 
-        # no, user might have made a context spelling mistake    0
-    # context doesn't exist in db, do you want to assign keyword def. to a context?  0 
-                            # yes, create keyword & context [yes]     1
-                            # no, user might have made a context spelling mistake  0
-
-
-# keyword exists, context doesn't                                                          1 0 
-    # with no context defined. Would the user want to create another context?                             
-        # yes, then prompt for user to specify context       1
-                     # update definition & context?  0
-                     # keep the old def, but new context, definition pair? (a dict)  1
-        # no, then update the existing definition, keep with no context.  0
-    # with one context. Would the user want to create another context?
-        # no [update keyword]    
-        # yes [Keep old definition and create a new definition with context]
-            # context == prevctx?
-                # yes, update keyword, keep context
-                # no, Does user want to create a new def. with context?
-                    # yes
-                    # no, update def. & update context
-    # with more contexts(more defs.)  # TODO display context and 3 lines from definition for each definition
-    # keyword exists with more contexts(more definitions) -> 
-    # user chose which context to load, so the context should 
-    # be known & stored before this function is called. Would the user want to create another context?
-        # yes, then prompt for user to specify context       
-                     # update definition & context?  
-                     # keep the old def, but new context, definition pair? (a dict)  
-        # no, then update the existing definition, keep with same context.  
-
-
-# keyword exists, context exists                                                           1 1
-    # if more contexts, load one of them
-    # context exists in db:
-        # context == prevctx?
-            # yes, then update keyword             
-            # no:
-                # abort? [a]
-                # keyword has no context. Update kewyword and assign a context?
-                    # yes
-                    # no, keep old definition and create a new def with this context
-                # keyword has a context. Do you want to update just the keyword context?
-                    # yes, update keyword and context
-                    # no, keep old definition and create a new def with context
-    # context doesn't exist in db:
-        # abort [a]
-        # keyword has no context. Update kewyword and assign a context?
-            # yes
-            # no, keep old definition and create a new def with this context
-        # keyword has a context. Do you want to update just the keyword context?
-            # yes, update keyword and context
-            # no, keep old definition and create a new def with context
-
-
-
-
-            #if keyword:
-            #    # if keyword already defined in database, update it
-            #    keyword = update_keyword_info(store, keyword, help_buffer)
-            #else:
-            #    # create a new keyword
-            #    keyword = create_keyword(store, word, help_buffer)
-
-## TODO: context.name? this will be an error if no context is defined whatsoever
-#print("Keyword and its definition were saved in %s context." % context.name)
-
-store.close()
+gotoword.helper_save(context, gotoword.store)
+# TODO: gotoword.helper_save(keyword, context, gotoword.store)
 EOF
 endfunction
-
-
-
-if !exists(":HelperDelete")
-  command -nargs=0 HelperDelete call s:Helper_delete()
-endif
 
 
 function! s:Helper_delete()
@@ -268,48 +165,11 @@ function! s:Helper_delete()
 " One could delete the definition for one context while keeping the others
 
 " TODO: what plugin functions need to be run first so that this function can
-" be called? 
-
-python << EOF
-
-# this function deletes from DB the keyword whose content in help_buffer 
-# is displayed;
-# in the future, it could delete from DB the word under cursor.
-
-# python imports from vim functions run previously are still available, as 
-# well as the variables defined.
-
-# reopen database connection
-store._connection = store.get_database().connect()
-
-# TODO: prompt a question for user to confirm if he wants keyword with name x 
-# to be deleted. 
-# Edge case: user calls Help_buffer on word, but word doesn't exist so he 
-# starts filling the definition, but he changes his mind and wants to delete 
-# the keyword - calls :HelperDelete, because he thinks kw in the db, but it 
-# isn't, so db will throw a python storm error. Provide a backup for this...
-
-if keyword:
-    kw_name = keyword.name
-    store.remove(keyword)
-    store.commit()
-    print("Keyword %s and its definition removed from database" % kw_name)
-else:
-    print("Can't delete a word and its definition if it's not in the database.")
-
-store.close()
-
-EOF
+" be called? They should be: Helper and/or Helper_save
+" so it should test in vim code for function flags...
+    python gotoword.helper_delete(keyword, gotoword.store)
 endfunction
 
-
-" TODO: create a HelperDeleteContext and/or HelperDefineContext or
-" HelperContext delete/new/list         new or save or add; which one?
-
-
-if !exists(":HelperAllWords")
-  command -nargs=0 HelperAllWords call s:Helper_all_words()
-endif
 
 function! s:Helper_all_words()
     " this function displays all keywords from DB in help_buffer, sorted in 
@@ -322,7 +182,6 @@ function! s:Helper_all_words()
        call s:Initialize_gotoword() 
     endif
     
-    python from gotoword import helper_all_words          " TODO: import from gotoword once
-    python helper_all_words(store, help_buffer)
+    python gotoword.helper_all_words(store, help_buffer)
 
 endfunction
