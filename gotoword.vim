@@ -106,7 +106,7 @@ endif
 
 " FUNCTIONS
 "
-function! s:Initialize_gotoword()             
+function s:Initialize_gotoword()             
     " s: means function is local to script, not part of the global namespace
     " this function is run only once, it creates a helper_buffer, so helper_buffer 
     " should not be deleted(wiped) with :bwipe
@@ -154,7 +154,8 @@ try:
 except vim.error:
     context = ''
 
-gotoword.helper_save(context, gotoword.store)
+gotoword.helper_save(context)
+#gotoword.helper_save(context, gotoword.store)
 # TODO: gotoword.helper_save(keyword, context, gotoword.store)
 EOF
 endfunction
@@ -167,7 +168,8 @@ function! s:Helper_delete()
 " TODO: what plugin functions need to be run first so that this function can
 " be called? They should be: Helper and/or Helper_save
 " so it should test in vim code for function flags...
-    python gotoword.helper_delete(keyword, gotoword.store)
+    python gotoword.helper_delete(keyword)
+    "python gotoword.helper_delete(keyword, gotoword.store)
 endfunction
 
 
@@ -182,6 +184,7 @@ function! s:Helper_all_words()
        call s:Initialize_gotoword() 
     endif
     
-    python gotoword.helper_all_words(store, help_buffer)
+    python gotoword.helper_all_words()
+    "python gotoword.helper_all_words(store, help_buffer)
 
 endfunction
