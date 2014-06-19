@@ -26,6 +26,7 @@ sys.path.insert(1, os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_
 import utils               # should be replaced by import utils
 import gotoword_state_machine
 
+#def import_vim():
 ### import special vim python library  ###
 try:
     import vim
@@ -79,60 +80,52 @@ except ImportError:
     vim.windows = [mock_win]
 
 
-### MAIN ###
-
-database = utils.create_database('sqlite:' + DATABASE)
-# Eg: DATABASE = 'sqlite:/home/andrei/.vim/andrei_plugins/gotoword/keywords.db'
-store = Store(database)
-# store is a cursor to database wrapped by storm
-
-help_window = None
-# create a help_buffer that will hold info retrieved from database, etc. but
-# prevent vim to create buffer in current working dir, by setting an explicit
-# path; this way, python imports from our own library are easier
-help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
-# help_buffer is created on the fly, it doesn't exist on disk, but we
-# specify a full path as its name
-# TODO: rename helper_buffer to gotoword_buffer
-
-# find and store the help window's index for further reference to it
-# if the user needs help on other words, you just change the window buffer
-# or, update the current buffer, so help_window might not be needed
-for win in vim.windows:
-    if win.buffer.name == help_buffer_name:
-        # if already there is a window which displays the help buffer
-        help_window = win
-        #win.buffer.append("Help window: %s" % help_window)
-
-if not help_window:
-    try:
-    # open the andrei_help buffer in a new window
-    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
-    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
-        # opens file in same win
-        vim.command("exe 'split %s'" % help_buffer_name)
-        #vim.command("exe 'set readonly'")                   # or 'set ro'
-        # by setting buffer readonly, we want user to prevent from saving it
-        # on harddisk with :w cmd, instead we want user to update the
-        # database with HelperUpdate vim cmd or HelperSave
-    except vim.error:
-        print("can't create %s buffer, it already exists." % help_buffer_name)
-
-"""
-map buffer names to vim.buffers indices for easier access from python
-(indices differ when compared to vim buffers' indices, but the name is the
-same, so we need to access buffers by name)
-"""
-py_buffers = {}
-for index, b in enumerate(vim.buffers):
-    py_buffers[b.name] = index + 1
-    # vim indexing starts from 1, but index starts from 0
-    # >>> print(py_buffers)
-    #{'/home/andrei/.vim/andrei_plugins/andrei_helper': 1, '/home/andrei/bash_exp/-MiniBufExplorer-': 2, '/home/andrei/bash_exp/sugarsync.kv': 0}
-help_buffer = vim.buffers[py_buffers[help_buffer_name]]
+def open_help_buffer(buffer_name):
+    """
+    Opens a buffer customized for this plugin, a "scratch" kind of buffer.
+    To read more about it, inside vim do:
+    :help special-buffers
+    """
+    vim.command("split %s" % help_buffer_name)
+    # prevent vim from focusing the new window created on top, by
+    # focusing the one below (the original window), with <C-w>j
+    vim.command('call feedkeys("\<C-w>j")')
+    # make it a scratch buffer
+    vim.command("setlocal buftype=nofile")
+    vim.command("setlocal bufhidden=hide")
+    vim.command("setlocal noswapfile")
+    # prevent buffer from being added to the buffer list; can be seen with :ls!
+    vim.command("setlocal nobuflisted")
 
 
 def update_help_buffer(word):
+    #if not help_window:    # TODO you need to put an else clause, to let vim reuse same helper_buffer window
+    #    try:
+    #    # open the andrei_help buffer in a new window
+    #    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
+    #    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
+    #        # opens file in same win
+    #        vim.command("exe 'split %s'" % help_buffer_name)
+    #        #vim.command("exe 'set readonly'")                   # or 'set ro'
+    #        # by setting buffer readonly, we want user to prevent from saving it
+    #        # on harddisk with :w cmd, instead we want user to update the
+    #        # database with HelperUpdate vim cmd or HelperSave
+    #    except vim.error:
+    #        print("can't create %s buffer, it already exists." % help_buffer_name)
+
+    # get current value of switchbuf
+    # TODO: figure out a way to get the current value of switchbuf
+    vim.command("set switchbuf=useopen")
+    # 'sbuffer' replaces 'split' because we want to use same buffer window if
+    # it exists as sbuffer checks for switchbuf option
+    vim.command("sbuffer %s" % help_buffer_name)
+
+    # restore switchbuf to its initial value
+    # reset switchbuf to its default value in order not to affect other plugin
+    # functionality:
+    vim.command("set switchbuf&")
+
+
     # reopen database connection
     store._connection = store.get_database().connect()
     # make it unicode, for python2.x, this is what is stored in the db
@@ -144,6 +137,8 @@ def update_help_buffer(word):
 
     if keyword:
         # load content in buffer, previous content is deleted
+        # if called repeatedly, remove readonly flag set by previous calls
+        vim.command("exe 'set noreadonly'")                 # or 'set noro'
         help_buffer[:] = keyword.info.splitlines()
         vim.command("exe 'set readonly'")                   # or 'set ro'
     else:
@@ -337,3 +332,75 @@ def helper_all_words():
     vim.command("exe 'set ro'")                       # set noreadonly
 
     store.close()
+
+
+### MAIN ###
+
+database = utils.create_database('sqlite:' + DATABASE)
+# Eg: DATABASE = 'sqlite:/home/andrei/.vim/andrei_plugins/gotoword/keywords.db'
+store = Store(database)
+# store is a cursor to database wrapped by storm
+
+help_window = None
+# create a help_buffer that will hold info retrieved from database, etc. but
+# prevent vim to create buffer in current working dir, by setting an explicit
+# path; this way, python imports from our own library are easier
+help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
+# help_buffer is created on the fly, it doesn't exist on disk, but we
+# specify a full path as its name
+# TODO: rename helper_buffer to gotoword_buffer
+
+# find and store the help window's index for further reference to it
+# if the user needs help on other words, you just change the window buffer
+# or, update the current buffer, so help_window might not be needed
+for win in vim.windows:
+    if win.buffer.name == help_buffer_name:
+        # if already there is a window which displays the help buffer
+        help_window = win
+        #win.buffer.append("Help window: %s" % help_window)
+
+        # def get_help_buffer():
+        # if bufexists(help_buffer_name)
+        # if bufloaded(help_buffer_name)
+        #             if help_window get focus of it:
+        #             for win in vim.windows:
+        #                   if help_window = winnr()  # nr of current window
+        #                   (the one with focus)
+
+                            # :buffer or sbuffer help_buffer_name
+        # else
+        #vim.command("exe 'split %s'" % help_buffer_name)
+        # help_window =  bufwinnr(help_buffer_name)
+        # buf_nr = vim.eval("bufnr(%s)" % help_buffer_name)
+        # help_buffer = vim.buffers[buf_nr]
+
+open_help_buffer(help_buffer_name)
+#if not help_window:
+#    try:
+#    # open the andrei_help buffer in a new window
+#    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
+#    #vim.command("exe 'silent new' escape('%s', '\ ')" % help_buffer_name)
+#        # opens file in same win
+#        vim.command("exe 'split %s'" % help_buffer_name)
+#        #vim.command("exe 'set readonly'")                   # or 'set ro'
+#        # by setting buffer readonly, we want user to prevent from saving it
+#        # on harddisk with :w cmd, instead we want user to update the
+#        # database with HelperUpdate vim cmd or HelperSave
+#    except vim.error:
+#        # it occurs when you try to split the window which displays the
+#        # help_buffer
+#        # I might need to get rid of it
+#        print("can't create %s buffer, it already exists." % help_buffer_name)
+
+"""
+map buffer names to vim.buffers indices for easier access from python
+(indices differ when compared to vim buffers' indices, but the name is the
+same, so we need to access buffers by name)
+"""
+py_buffers = {}
+for index, b in enumerate(vim.buffers):
+    py_buffers[b.name] = index + 1
+    # vim indexing starts from 1, but index starts from 0
+    # >>> print(py_buffers)
+    #{'/home/andrei/.vim/andrei_plugins/andrei_helper': 1, '/home/andrei/bash_exp/-MiniBufExplorer-': 2, '/home/andrei/bash_exp/sugarsync.kv': 0}
+help_buffer = vim.buffers[py_buffers[help_buffer_name]]

@@ -75,6 +75,7 @@ if !has('python')
     finish                             " like python's sys.exit()
 endif
 
+" TODO: check for python 2 or python 3 if it works only on python3.
 
 " COMMANDS
 "
@@ -105,26 +106,26 @@ if !exists(":HelperAllWords")
 endif
 
 
+python from gotoword import gotoword, utils
+" or  python gotoword.main(), etc.
 
 " FUNCTIONS
 "
-function s:Initialize_gotoword()             
-    " s: means function is local to script, not part of the global namespace
-    " this function is run only once, it creates a helper_buffer, so helper_buffer 
-    " should not be deleted(wiped) with :bwipe
-
-    "if exists("g:gotoword_initialized")
-    "  finish       " replace finish with the equivalent of python's pass kw
-    "endif
-
-    python from gotoword import gotoword, utils
-    " or  python gotoword.main(), etc.
-    let g:gotoword_initialized = 1
-endfunction
+"function s:Initialize_gotoword()             
+"    " s: means function is local to script, not part of the global namespace
+"    " this function is run only once, it creates a helper_buffer, so helper_buffer 
+"    " should not be deleted(wiped) with :bwipe
+"
+"    if !exists("g:gotoword_initialized")
+"        python from gotoword import gotoword, utils
+"        " or  python gotoword.main(), etc.
+"        let g:gotoword_initialized = 1
+"    endif
+"endfunction
 
 
 function! s:Help_buffer(word)              " fct name always starts with uppercase
-    call s:Initialize_gotoword() 
+    "call s:Initialize_gotoword() 
 
 python << EOF
 # get function argument
@@ -182,9 +183,9 @@ function! s:Helper_all_words()
     " TODO: should take optional positional arguments indicating the context
     " like Helper_all_words('python') to display all words in python context
 
-    if !exists("g:gotoword_initialized")
-       call s:Initialize_gotoword() 
-    endif
+    "if !exists("g:gotoword_initialized")
+    "   call s:Initialize_gotoword() 
+    "endif
     
     python gotoword.helper_all_words()
     "python gotoword.helper_all_words(store, help_buffer)
