@@ -3,11 +3,6 @@
 " Maintainer:	Andrei Chiver  <andreichiver@gmail.com>
 " License:	This file is placed in the public domain.
 
-"if exists("g:loaded_gotoword")
-"  finish
-"endif
-"let g:loaded_gotoword = 1
-
 
 " SHORT DESCRIPTION
 " plugin that opens a help file in a separate buffer for the  word under 
@@ -37,6 +32,8 @@
 " If you get a message that no Helper command is defined, type:
 " :source path_to_the_plugin
 " To check if script sourced, call Helper cmd again
+
+
 
 " DETAILED DESCRIPTION
 "
@@ -77,6 +74,13 @@ endif
 
 " TODO: check for python 2 or python 3 if it works only on python3.
 
+
+if exists("g:gotoword_loaded")
+  finish
+endif
+let g:gotoword_loaded = 1
+
+
 " COMMANDS
 "
 if !exists(":Helper")
@@ -106,26 +110,12 @@ if !exists(":HelperAllWords")
 endif
 
 
-python from gotoword import gotoword, utils
-" or  python gotoword.main(), etc.
 
 " FUNCTIONS
-"
-"function s:Initialize_gotoword()             
-"    " s: means function is local to script, not part of the global namespace
-"    " this function is run only once, it creates a helper_buffer, so helper_buffer 
-"    " should not be deleted(wiped) with :bwipe
-"
-"    if !exists("g:gotoword_initialized")
-"        python from gotoword import gotoword, utils
-"        " or  python gotoword.main(), etc.
-"        let g:gotoword_initialized = 1
-"    endif
-"endfunction
 
-
-function! s:Help_buffer(word)              " fct name always starts with uppercase
-    "call s:Initialize_gotoword() 
+function! s:Help_buffer(word)           
+    " fct name always starts with uppercase
+    " s: means function is local to script, not part of the global namespace
 
 python << EOF
 # get function argument
@@ -135,7 +125,7 @@ word = gotoword.vim.eval("a:word")      # get argument by name
 keyword = gotoword.update_help_buffer(word)
 EOF
 
-    let g:loaded_Help_buffer = 1
+    let g:loaded_help_buffer = 1
 endfunction
 
 
@@ -165,12 +155,12 @@ endfunction
 
 
 function! s:Helper_delete()
-" TODO: should take optional positional arguments indicating the context
-" One could delete the definition for one context while keeping the others
+    " TODO: should take optional positional arguments indicating the context
+    " One could delete the definition for one context while keeping the others
 
-" TODO: what plugin functions need to be run first so that this function can
-" be called? They should be: Helper and/or Helper_save
-" so it should test in vim code for function flags...
+    " TODO: what plugin functions need to be run first so that this function can
+    " be called? They should be: Helper and/or Helper_save
+    " so it should test in vim code for function flags...
     python gotoword.helper_delete(keyword)
     "python gotoword.helper_delete(keyword, gotoword.store)
 endfunction
@@ -183,11 +173,15 @@ function! s:Helper_all_words()
     " TODO: should take optional positional arguments indicating the context
     " like Helper_all_words('python') to display all words in python context
 
-    "if !exists("g:gotoword_initialized")
-    "   call s:Initialize_gotoword() 
-    "endif
-    
-    python gotoword.helper_all_words()
+    python gotoword.helper_all_words(gotoword.help_buffer)
     "python gotoword.helper_all_words(store, help_buffer)
 
 endfunction
+
+
+
+" MAIN 
+"
+python from gotoword import gotoword, utils
+" or  python gotoword.main(), etc.
+

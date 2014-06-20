@@ -82,6 +82,77 @@ except ImportError:
     vim.windows = [mock_win]
 
 
+def toggle_readonly(f):
+    """decorator used to set buffer options inside vim editor"""
+    def wraps(*args, **kwargs):
+        # if called repeatedly, remove readonly flag set by previous calls
+        vim.command("set noreadonly")
+        res = f(*args, **kwargs)
+        vim.command("set readonly")
+        # by setting buffer readonly, we want user to prevent from saving it
+        # on harddisk with :w cmd, instead we want user to update the
+        # database with HelperUpdate vim cmd or HelperSave
+        return res
+    return wraps
+
+
+class HelperBuffer(object):
+    """
+    Wraps a vim buffer. Needed to set buffer options before and after any
+    assignment to the vim buffer which mimics a bit the behaviour of a list.
+    """
+    def __init__(self, vim, sequence):
+        # vim arg. is the exposed interface of the vim editor.
+        self.vim = vim
+        self._buffer = sequence
+
+# TODO: I think _set_buffer & _get_buffer can be safely deleted
+    def _set_buffer(self, value):
+        """ Called when HelperBuffer_obj = value """
+        self._buffer = value
+
+    def _get_buffer(self):
+        """
+        Called when buffer is read: x = HelperBuffer_obj
+        """
+        return self._buffer
+
+    @toggle_readonly
+    def __setitem__(self, index, value):
+        """
+        type(index) = int or slice obj. Called when obj[i:j] = value
+        """
+        if isinstance(index, int):
+            self._buffer[index] = value
+        elif isinstance(index, slice):
+            start, stop, step = index.indices(len(self._buffer))
+            self._buffer[start:stop] = value
+            # it seems that _buffer[start:stop:step] is not accepted by the
+            # underlying vim buffer
+        else:
+            raise TypeError("index must be either an int or a slice object")
+
+    def __getitem__(self, index):
+        """
+        type(index) = int or slice obj. Called when var = obj[i:j]
+        """
+        return self._buffer[index]
+
+
+def database_operations(f):
+    """decorator used to open and close a database connection before each
+    call to the wrapped function."""
+    def wraps(*args, **kwargs):
+        # reopen database connection
+        store._connection = store.get_database().connect()
+        # call decorated function
+        res = f(*args, **kwargs)
+        # close database connection
+        store.close()
+        return res
+    return wraps
+
+
 def open_help_buffer(buffer_name):
     """
     It does an init job for a vim buffer by setting buffer options.
@@ -91,97 +162,100 @@ def open_help_buffer(buffer_name):
 
     returns a reference to the vim buffer.
     """
+    # get the current (active) buffer where this function is called from, so
+    # that we can get back to it after we setup our helper_buffer
+    user_buf_nr = vim.eval("winbufnr(0)")
+
     # create a buffer without opening it in a window
-    vim.command("badd %s" % help_buffer_name)
+    vim.command("badd %s" % buffer_name)
     # create a buffer by opening it in a window
     #vim.command("split %s" % help_buffer_name)
 
-# TODO: this fct. messes up the original buffer (the one with the file we need
-# help with. That's because we setlocal to file buffer, not helper_buffer...
-# might need to merge open_buffer with update_buffer, ...
+    # we need the buffer number assigned by vim so we can get a reference
+    # to it that we can later use
+    buf_nr = vim.eval("bufnr('%s')" % buffer_name)
+    # vim.eval returns a string that contains a vim list index
+    buf_nr = int(buf_nr)
+    # this is how we get the window number of the buffer
+    # help_window =  bufwinnr(help_buffer_name)
+    my_buffer = HelperBuffer(vim, vim.buffers[buf_nr])
+    #help_buffer = vim.buffers[buf_nr]
 
+    # activate the buffer so we can set some buffer options
+    vim.command("buffer! %s" % buf_nr)
     # make it a scratch buffer
     vim.command("setlocal buftype=nofile")
     vim.command("setlocal bufhidden=hide")
     vim.command("setlocal noswapfile")
     # prevent buffer from being added to the buffer list; can be seen with :ls!
     vim.command("setlocal nobuflisted")
+    # TODO: above options can be expressed in only one "setlocal ..." line
 
-    # we need the buffer number assigned by vim so we can get a reference
-    # to it that we can use
-    # help_window =  bufwinnr(help_buffer_name)
-    buf_nr = vim.eval("bufnr('%s')" % help_buffer_name)
-    # vim.eval returns a string that contains a vim list index
-    buf_nr = int(buf_nr)
-    help_buffer = vim.buffers[buf_nr]
+    # activate the user (initial) buffer
+    vim.command("buffer! %s" % user_buf_nr)
 
-    return help_buffer
+    return my_buffer
+    #return help_buffer
 
 
+@database_operations
 def update_help_buffer(word):
     """
-    Updates an existing buffer, hidden or not, with information about a
-    keyword or displays an invitation to user to fill in info about words
-    that don't exist in the database.
+    Updates an existing buffer with information about a
+    keyword or displays an invitation for the user to fill in info about
+    words that don't exist in the database.
+
+    Tasks:
+        open help buffer in its own window
+        look for keyword in database
+        display info in the help_buffer
     """
-    # get current value of switchbuf
-    # TODO: figure out a way to get the current value of switchbuf
-    vim.command("set switchbuf=useopen")
-    # 'sbuffer' replaces 'split' because we want to use same buffer window if
-    # it exists as sbuffer checks for switchbuf option
-    vim.command("sbuffer %s" % help_buffer_name)
-
-    # prevent vim from focusing the new window created on top, by
-    # focusing the one below (the original window), with <C-w>j
-    vim.command('call feedkeys("\<C-w>j")')
-
-    # restore switchbuf to its initial value
-    # reset switchbuf to its default value in order not to affect other plugin
-    # functionality:
-    vim.command("set switchbuf&")
-
-    # reopen database connection
-    store._connection = store.get_database().connect()
-    # make it unicode, for python2.x, this is what is stored in the db
+    # convert fct. arg to unicode, for python2.x, this is what is stored in the db
     word = unicode(word)
     # make it case-insensitive
     word = word.lower()
+
+    # save current value of 'switchbuf' in order to restore it later and add
+    # 'useopen' value to it
+    vim.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+
+    # open help buffer
+    # 'sbuffer' replaces 'split' because we want to use same buffer window if
+    # it exists as sbuffer checks the switchbuf option
+    vim.command("sbuffer %s" % help_buffer_name)
+
+    # restore switchbuf to its default value in order not to affect other plugin
+    # functionality:
+    vim.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
+
+    # prevent vim from focusing the new helper window created on top, by
+    # focusing the last one used.
+    # CTRL-W p   Go to previous (last accessed) window.
+    vim.command('call feedkeys("\<C-w>p")')
+
     # look for keyword in DB
     keyword = utils.find_keyword(store, word)
 
     if keyword:
         # load content in buffer, previous content is deleted
-
-        # if called repeatedly, remove readonly flag set by previous calls
-        vim.command("set noreadonly")                 # or 'set noro'
         help_buffer[:] = keyword.info.splitlines()
-        vim.command("set readonly")                   # or 'set ro'
-        # by setting buffer readonly, we want user to prevent from saving it
-        # on harddisk with :w cmd, instead we want user to update the
-        # database with HelperUpdate vim cmd or HelperSave
     else:
         # keyword doesn't exist, prepare buffer to be filled with user content
 
-        vim.command("set noreadonly")
         # write to buffer the small help text
         help_buffer[:] = utils.introduction_line(word).splitlines()
-        vim.command("set readonly")
         # .splitlines() is used because vim buffer accepts at most one "\n"
         # per vim line
 
-    # close database connection
-    store.close()
     return keyword
 
 
+@database_operations
 def helper_save(context):
     """
     this function, if called twice on same keyword(first edit, then an update)
     should know that it doesn't need to create another keyword, just to update
     """
-    # reopen database connection
-    store._connection = store.get_database().connect()
-
     # initialize state machine to handle case 00
 
     #m = gotoword_state_machine.StateMachine()
@@ -284,17 +358,14 @@ def helper_save(context):
     ## TODO: context.name? this will be an error if no context is defined whatsoever
     #print("Keyword and its definition were saved in %s context." % context.name)
 
-    store.close()
 
-
+@database_operations
 def helper_delete(keyword):
     """
     this function deletes from DB the keyword whose content in help_buffer
     is displayed;
     in the future, it could delete from DB the word under cursor.
     """
-    # reopen database connection
-    store._connection = store.get_database().connect()
 
     # TODO: prompt a question for user to confirm if he wants keyword with name x
     # to be deleted.
@@ -313,16 +384,12 @@ def helper_delete(keyword):
     else:
         print("Can't delete a word and its definition if it's not in the database.")
 
-    store.close()
 
-
-def helper_all_words():
+@database_operations
+def helper_all_words(help_buffer):
     """
     List all keywords from database into help_buffer.
     """
-
-    # reopen database connection
-    store._connection = store.get_database().connect()
     # select only the keyword names
     result = store.execute("SELECT name FROM keyword;")
     # dump from generator into a list
@@ -343,14 +410,10 @@ def helper_all_words():
     >>> names
     [u'canvas', u'color', u'line']
     '''
-    vim.command("set noro")                     # set noreadonly
-    #help_buffer[:] = "\t".join(names)
     help_buffer[:] = names
-    vim.command("set ro")                       # set noreadonly
-
-    store.close()
 
 
+############
 ### MAIN ###
 
 database = utils.create_database('sqlite:' + DATABASE)
