@@ -81,8 +81,10 @@ endif
 let g:gotoword_loaded = 1
 
 
-" COMMANDS
-"
+" --------------------------------
+" COMMANDS 
+" --------------------------------
+
 if !exists(":Helper")
   command -nargs=0 Helper call s:Help_buffer(expand("<cword>"))
 endif
@@ -110,8 +112,9 @@ if !exists(":HelperAllWords")
 endif
 
 
-
-" FUNCTIONS
+" --------------------------------
+" FUNCTIONS 
+" --------------------------------
 
 function! s:Help_buffer(word)           
     " fct name always starts with uppercase
@@ -181,7 +184,13 @@ endfunction
 
 
 " MAIN 
-"
+
+" --------------------------------
+" Add our plugin to the path
+" --------------------------------
+python import sys
+python import vim
+python sys.path.append(vim.eval('expand("<sfile>:h")'))
+
 python from gotoword import gotoword, utils
 " or  python gotoword.main(), etc.
-

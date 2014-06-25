@@ -82,9 +82,26 @@ except ImportError:
     vim.windows = [mock_win]
 
 
+def toggle_activate(f):
+    """
+    Activate/focus the helper buffer and then activate/focus again the last
+    used buffer.
+    """
+    def wrapper_activate(obj, *args, **kwargs):
+        # store old buffer
+        user_buf_nr = get_active_buffer(vim)
+        # activate the buffer so we can set some buffer options
+        vim.command("buffer! %s" % obj.buffer_nr)
+        f(obj, *args, **kwargs)
+        # f(obj, ...) because we need to pass ALL args to wrapped function
+        # make active again the old buffer
+        vim.command("buffer! %s" % user_buf_nr)
+    return wrapper_activate
+
+
 def toggle_readonly(f):
     """decorator used to set buffer options inside vim editor"""
-    def wraps(*args, **kwargs):
+    def wrapper_readonly(*args, **kwargs):
         # if called repeatedly, remove readonly flag set by previous calls
         vim.command("set noreadonly")
         res = f(*args, **kwargs)
@@ -93,7 +110,7 @@ def toggle_readonly(f):
         # on harddisk with :w cmd, instead we want user to update the
         # database with HelperUpdate vim cmd or HelperSave
         return res
-    return wraps
+    return wrapper_readonly
 
 
 class HelperBuffer(object):
@@ -101,12 +118,20 @@ class HelperBuffer(object):
     Wraps a vim buffer. Needed to set buffer options before and after any
     assignment to the vim buffer which mimics a bit the behaviour of a list.
     """
-    def __init__(self, vim, sequence):
+    def __init__(self, vim, buffer_name):
         # vim arg. is the exposed interface of the vim editor.
         self.vim = vim
-        self._buffer = sequence
+        # we need the buffer number assigned by vim so we can get a reference
+        # to it that we can later use by indexing vim buffers list.
+        buffer_nr = vim.eval("bufnr('%s')" % buffer_name)
+        # vim.eval returns a string that contains a vim list index
+        self.buffer_nr = int(buffer_nr)
+        # define the internal buffer which is the vim buffer:
+        self._buffer = self.vim.buffers[self.buffer_nr]
+        self.name = buffer_name
 
-# TODO: I think _set_buffer & _get_buffer can be safely deleted
+# TODO: I think _set_buffer & _get_buffer can be safely deleted; nothing uses
+# them
     def _set_buffer(self, value):
         """ Called when HelperBuffer_obj = value """
         self._buffer = value
@@ -117,9 +142,11 @@ class HelperBuffer(object):
         """
         return self._buffer
 
-    @toggle_readonly
+    @toggle_activate            # activate it before changing a vim buffer
+    @toggle_readonly            # remove any readonly buffer protection
     def __setitem__(self, index, value):
         """
+        Called when obj[i:j] = sequence
         type(index) = int or slice obj. Called when obj[i:j] = value
         """
         if isinstance(index, int):
@@ -138,11 +165,10 @@ class HelperBuffer(object):
         """
         return self._buffer[index]
 
-
 def database_operations(f):
     """decorator used to open and close a database connection before each
     call to the wrapped function."""
-    def wraps(*args, **kwargs):
+    def wrapper_operations(*args, **kwargs):
         # reopen database connection
         store._connection = store.get_database().connect()
         # call decorated function
@@ -150,10 +176,16 @@ def database_operations(f):
         # close database connection
         store.close()
         return res
-    return wraps
+    return wrapper_operations
+
+def get_active_buffer(vim):
+    """
+    get the current (active) vim buffer. so
+    """
+    return vim.eval("winbufnr(0)")
 
 
-def open_help_buffer(buffer_name):
+def setup_help_buffer(buffer_name):
     """
     It does an init job for a vim buffer by setting buffer options.
     Opens a buffer customized for this plugin, a "scratch" or temporary kind
@@ -162,40 +194,56 @@ def open_help_buffer(buffer_name):
 
     returns a reference to the vim buffer.
     """
-    # get the current (active) buffer where this function is called from, so
-    # that we can get back to it after we setup our helper_buffer
-    user_buf_nr = vim.eval("winbufnr(0)")
+    # store current active buffer so that we can get back to it after we setup
+    # our helper_buffer
+    user_buf_nr = get_active_buffer(vim)
 
     # create a buffer without opening it in a window
     vim.command("badd %s" % buffer_name)
     # create a buffer by opening it in a window
     #vim.command("split %s" % help_buffer_name)
 
-    # we need the buffer number assigned by vim so we can get a reference
-    # to it that we can later use
-    buf_nr = vim.eval("bufnr('%s')" % buffer_name)
-    # vim.eval returns a string that contains a vim list index
-    buf_nr = int(buf_nr)
-    # this is how we get the window number of the buffer
-    # help_window =  bufwinnr(help_buffer_name)
-    my_buffer = HelperBuffer(vim, vim.buffers[buf_nr])
-    #help_buffer = vim.buffers[buf_nr]
+    my_buffer = HelperBuffer(vim, buffer_name)
 
     # activate the buffer so we can set some buffer options
-    vim.command("buffer! %s" % buf_nr)
+    vim.command("buffer! %s" % my_buffer.buffer_nr)
     # make it a scratch buffer
     vim.command("setlocal buftype=nofile")
     vim.command("setlocal bufhidden=hide")
     vim.command("setlocal noswapfile")
     # prevent buffer from being added to the buffer list; can be seen with :ls!
     vim.command("setlocal nobuflisted")
-    # TODO: above options can be expressed in only one "setlocal ..." line
+    # Note: above options can be expressed in only one "setlocal ..." line
 
     # activate the user (initial) buffer
     vim.command("buffer! %s" % user_buf_nr)
 
     return my_buffer
-    #return help_buffer
+
+
+def open_window(buffer_name):
+    """
+    Opens a window inside vim editor with an existing buffer whose name is
+    the value of buffer name.
+    """
+    # save current global value of 'switchbuf' in order to restore it later
+    # and add 'useopen' value to it
+    vim.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+
+    # open help buffer
+    # 'sbuffer' replaces 'split' because we want to use same buffer window if
+    # it exists because sbuffer checks the switchbuf option
+    vim.command("sbuffer %s" % buffer_name)
+
+    # restore switchbuf to its default value in order not to affect other plugin
+    # functionality:
+    vim.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
+
+    # prevent vim from focusing the helper window created on top, by
+    # focusing the last one used (the window used by user before calling this
+    # plugin).
+    # CTRL-W p   Go to previous (last accessed) window.
+    vim.command('call feedkeys("\<C-w>p")')
 
 
 @database_operations
@@ -215,23 +263,7 @@ def update_help_buffer(word):
     # make it case-insensitive
     word = word.lower()
 
-    # save current value of 'switchbuf' in order to restore it later and add
-    # 'useopen' value to it
-    vim.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
-
-    # open help buffer
-    # 'sbuffer' replaces 'split' because we want to use same buffer window if
-    # it exists as sbuffer checks the switchbuf option
-    vim.command("sbuffer %s" % help_buffer_name)
-
-    # restore switchbuf to its default value in order not to affect other plugin
-    # functionality:
-    vim.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
-
-    # prevent vim from focusing the new helper window created on top, by
-    # focusing the last one used.
-    # CTRL-W p   Go to previous (last accessed) window.
-    vim.command('call feedkeys("\<C-w>p")')
+    open_window(help_buffer_name)
 
     # look for keyword in DB
     keyword = utils.find_keyword(store, word)
@@ -410,6 +442,7 @@ def helper_all_words(help_buffer):
     >>> names
     [u'canvas', u'color', u'line']
     '''
+    open_window(help_buffer.name)
     help_buffer[:] = names
 
 
@@ -429,4 +462,4 @@ help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper
 # specify a full path as its name
 # TODO: rename helper_buffer to gotoword_buffer
 
-help_buffer = open_help_buffer(help_buffer_name)
+help_buffer = setup_help_buffer(help_buffer_name)
