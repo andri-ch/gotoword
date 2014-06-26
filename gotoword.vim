@@ -191,6 +191,9 @@ endfunction
 python import sys
 python import vim
 python sys.path.append(vim.eval('expand("<sfile>:h")'))
+" :help sfile
+"python sys.path.append(vim.eval('expand("<sfile>:h")') + 'gotoword')
+"python print vim.eval('expand("<sfile>:h")')
 
 python from gotoword import gotoword, utils
 " or  python gotoword.main(), etc.

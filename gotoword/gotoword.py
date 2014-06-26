@@ -42,14 +42,14 @@ except ImportError:
     try:
         import vimmock
         vimmock.patch_vim()
+        # now we can import a mockup of vim
+        import vim
     except ImportError:
         print("you need to install vimmock if you want to import vim \n"
               "python module outside of the vim environment: \n"
               "sudo pip install vimmock")
         sys.exit()
 
-    # now we can import a mockup of vim
-    import vim
     # more patching because vimmock implements a minimal vim functionality
     mock_buf = vim.current.buffer
     # define attribute at runtime
@@ -165,6 +165,7 @@ class HelperBuffer(object):
         """
         return self._buffer[index]
 
+
 def database_operations(f):
     """decorator used to open and close a database connection before each
     call to the wrapped function."""
@@ -177,6 +178,7 @@ def database_operations(f):
         store.close()
         return res
     return wrapper_operations
+
 
 def get_active_buffer(vim):
     """
