@@ -2,6 +2,12 @@
 import os.path
 import sys
 
+# needed by MyVim class
+#import thread
+import threading
+import subprocess
+import time
+
 ### Third party libs ###
 from storm.locals import create_database, Store, Int, Unicode
 
@@ -28,7 +34,100 @@ sys.path.insert(1, os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_
 import utils               # should be replaced by import utils
 import gotoword_state_machine
 
-#def import_vim():
+#    try:
+#        import vimmock
+#        vimmock.patch_vim()
+#        # now we can import a mockup of vim
+#        import vim
+#    except ImportError:
+#        print("you need to install vimmock if you want to import vim \n"
+#              "python module outside of the vim environment: \n"
+#              "sudo pip install vimmock")
+#        sys.exit()
+#
+#    # more patching because vimmock implements a minimal vim functionality
+#    mock_buf = vim.current.buffer
+#    # define attribute at runtime
+#    mock_buf.name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
+#    mock_win = vim.current.window
+#    mock_win.buffer = mock_buf
+#    # mimic vim commands like "exe 'set noro'"
+#    vim.command = lambda x: ""
+#
+#    class mylist(list):
+#        """
+#        Mock up a list that always return the first element, the element
+#        we want, no matter the key.
+#        """
+#        def __init__(self, arg=None):
+#            if type(arg) is not list:
+#                raise TypeError
+#            super(list, self).__init__(arg)
+#            self.li = arg
+#
+#        def __getitem__(self, key):
+#            "implements self[key] functionality."
+#            return self.li[0]
+#
+#        def __iter__(self):
+#            "used by enumerate() or for loop, etc."
+#            return self.li.__iter__()
+#
+#    vim.buffers = mylist([mock_buf])        # emulate a list of buffers
+#    vim.windows = [mock_win]
+
+
+
+class MyVim(object):
+    """
+    It is an alternative to the vim python module, by implementing it as an
+    interface to a vim server, all commands and expressions are sent to it.
+    """
+    name = "GOTOWORD"
+
+    def __init__(self, filename=''):
+        # vim server needs to be started in a subprocess:
+        # subprocess.call("vim -g -n --servername GOTOWORD", shell=True)
+        # start vim subprocess in a new thread in order not to block this
+        # script:
+        self.server = threading.Thread(name="vim_server",
+                target=subprocess.call,
+                args=("vim -g -n --servername %s %s" % (self.name, filename),),
+                kwargs={'shell': True}
+        )
+        self.server.start()
+        # allow vim enough time to start as server, to avoid messages like:
+        # E247: no registered server named "GOTOWORD": Send expression failed.
+        # E247: no registered server named "GOTOWORD": Send failed.
+        while True:
+            vim_server = subprocess.check_output("vim --serverlist", shell=True)
+            if vim_server.strip().lower() != 'gotoword':
+                print("Launched vim server and waiting for it to become available.\n"
+                      "Stop this with CTRL + C if nothing happens in 3 or 4 seconds.")
+                time.sleep(1)
+            else:
+                break
+
+    def command(self, cmd):
+        """Like vim.command()"""
+        # We just send the command in an underlying shell to the vim server
+        # Eg: vim --servername GOTOWORD --remote-send ':qa! <Enter>'
+        subprocess.call(
+            """vim --servername {0} --remote-send ':{1} <Enter>'""".format(
+            self.name, cmd), shell=True)
+
+    def eval(self, expr):
+        """Like vim.eval()"""
+        # Eg. vim --servername GOTOWORD --remote-expr 'bufwinnr(1)'
+        res = subprocess.check_output(
+            """vim --servername {0} --remote-expr '{1}'""".format(
+            self.name, expr), shell=True).strip()
+        return res
+
+    def close(self):
+        """Sends the quit cmd to the vim server."""
+        pass
+
 ### import special vim python library  ###
 try:
     import vim
@@ -39,47 +138,7 @@ except ImportError:
     # just for testing purposes
     print("vim python module can't be used outside vim editor "
           "except if you install vimmock python module from PyPI.")
-    try:
-        import vimmock
-        vimmock.patch_vim()
-        # now we can import a mockup of vim
-        import vim
-    except ImportError:
-        print("you need to install vimmock if you want to import vim \n"
-              "python module outside of the vim environment: \n"
-              "sudo pip install vimmock")
-        sys.exit()
-
-    # more patching because vimmock implements a minimal vim functionality
-    mock_buf = vim.current.buffer
-    # define attribute at runtime
-    mock_buf.name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
-    mock_win = vim.current.window
-    mock_win.buffer = mock_buf
-    # mimic vim commands like "exe 'set noro'"
-    vim.command = lambda x: ""
-
-    class mylist(list):
-        """
-        Mock up a list that always return the first element, the element
-        we want, no matter the key.
-        """
-        def __init__(self, arg=None):
-            if type(arg) is not list:
-                raise TypeError
-            super(list, self).__init__(arg)
-            self.li = arg
-
-        def __getitem__(self, key):
-            "implements self[key] functionality."
-            return self.li[0]
-
-        def __iter__(self):
-            "used by enumerate() or for loop, etc."
-            return self.li.__iter__()
-
-    vim.buffers = mylist([mock_buf])        # emulate a list of buffers
-    vim.windows = [mock_win]
+    vim = MyVim()
 
 
 def toggle_activate(f):
@@ -116,7 +175,7 @@ def toggle_readonly(f):
 class HelperBuffer(object):
     """
     Wraps a vim buffer. Needed to set buffer options before and after any
-    assignment to the vim buffer which mimics a bit the behaviour of a list.
+    assignment to the vim buffer which partially mimics the behaviour of a list.
     """
     def __init__(self, vim, buffer_name):
         # vim arg. is the exposed interface of the vim editor.
@@ -411,7 +470,7 @@ def helper_delete(keyword):
     if keyword:
         kw_name = keyword.name
         # TODO: kw_name exists only for the print msg, but can be replaced by
-        # keyword.name which is still in the namespace
+        # keyword.name which is still in the namespace, right?
         store.remove(keyword)
         store.commit()
         print("Keyword %s and its definition removed from database" % kw_name)
@@ -450,7 +509,7 @@ def helper_all_words(help_buffer):
 
 ############
 ### MAIN ###
-
+#def main()
 database = utils.create_database('sqlite:' + DATABASE)
 # Eg: DATABASE = 'sqlite:/home/user/.vim/user_plugins/gotoword/keywords.db'
 store = Store(database)

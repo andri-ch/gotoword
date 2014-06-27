@@ -152,7 +152,7 @@ class TestGotoword(unittest.TestCase):
         # if the buffer or no window exists for it, -1 is returned by bufwinnr()
         self.assertNotEqual(int(window_nr), -1)
 
-        # check if definition corresponds to its word
+        # check if some buffer lines correspond
         info = sp.check_output("""vim --servername {0} --remote-expr 'getbufline({1}, 1, 3)'""".format(
             SERVER, buffer_nr), shell=True).strip()
         self.assertEqual(['canvas', 'color', 'test'], info.split())
