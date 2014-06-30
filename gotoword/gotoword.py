@@ -34,51 +34,38 @@ sys.path.insert(1, os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_
 import utils               # should be replaced by import utils
 import gotoword_state_machine
 
-#    try:
-#        import vimmock
-#        vimmock.patch_vim()
-#        # now we can import a mockup of vim
-#        import vim
-#    except ImportError:
-#        print("you need to install vimmock if you want to import vim \n"
-#              "python module outside of the vim environment: \n"
-#              "sudo pip install vimmock")
-#        sys.exit()
-#
-#    # more patching because vimmock implements a minimal vim functionality
-#    mock_buf = vim.current.buffer
-#    # define attribute at runtime
-#    mock_buf.name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
-#    mock_win = vim.current.window
-#    mock_win.buffer = mock_buf
-#    # mimic vim commands like "exe 'set noro'"
-#    vim.command = lambda x: ""
-#
-#    class mylist(list):
-#        """
-#        Mock up a list that always return the first element, the element
-#        we want, no matter the key.
-#        """
-#        def __init__(self, arg=None):
-#            if type(arg) is not list:
-#                raise TypeError
-#            super(list, self).__init__(arg)
-#            self.li = arg
-#
-#        def __getitem__(self, key):
-#            "implements self[key] functionality."
-#            return self.li[0]
-#
-#        def __iter__(self):
-#            "used by enumerate() or for loop, etc."
-#            return self.li.__iter__()
-#
-#    vim.buffers = mylist([mock_buf])        # emulate a list of buffers
-#    vim.windows = [mock_win]
+
+class App(object):
+    """
+    This is the main plugin app. Run App.main() method to launch it.
+    """
+    database = utils.create_database('sqlite:' + DATABASE)
+    # Eg: DATABASE = 'sqlite:/home/user/.vim/user_plugins/gotoword/keywords.db'
+    store = Store(database)
+    # store is a cursor to database wrapped by storm
+
+    # create a help_buffer that will hold info retrieved from database, etc. but
+    # prevent vim to create buffer in current working dir, by setting an explicit
+    # path;
+    help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME,
+                                    PLUGIN_NAME + '_buffer')
+    # help_buffer is created on the fly, in memory, it doesn't exist on disk, but we
+    # specify a full path as its name
+    # TODO: rename helper_buffer to gotoword_buffer
+
+    help_buffer = setup_help_buffer(help_buffer_name)
+
+    def __init__(self, vim_wrapper):
+        self.vim = vim_wrapper
+        self.keyword = None
+        # the current keyword which was displayed in helper buffer
+
+    def main(self):
+        """This might be obsolete."""
+        return self
 
 
-
-class MyVim(object):
+class VimWrapper(object):
     """
     It is an alternative to the vim python module, by implementing it as an
     interface to a vim server, all commands and expressions are sent to it.
@@ -100,6 +87,7 @@ class MyVim(object):
         # E247: no registered server named "GOTOWORD": Send expression failed.
         # E247: no registered server named "GOTOWORD": Send failed.
         while True:
+            # check server exists
             vim_server = subprocess.check_output("vim --serverlist", shell=True)
             if vim_server.strip().lower() != 'gotoword':
                 print("Launched vim server and waiting for it to become available.\n"
@@ -127,6 +115,7 @@ class MyVim(object):
     def close(self):
         """Sends the quit cmd to the vim server."""
         pass
+
 
 ### import special vim python library  ###
 try:
@@ -509,18 +498,5 @@ def helper_all_words(help_buffer):
 
 ############
 ### MAIN ###
-#def main()
-database = utils.create_database('sqlite:' + DATABASE)
-# Eg: DATABASE = 'sqlite:/home/user/.vim/user_plugins/gotoword/keywords.db'
-store = Store(database)
-# store is a cursor to database wrapped by storm
 
-# create a help_buffer that will hold info retrieved from database, etc. but
-# prevent vim to create buffer in current working dir, by setting an explicit
-# path;
-help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, "helper_buffer")
-# help_buffer is created on the fly, in memory, it doesn't exist on disk, but we
-# specify a full path as its name
-# TODO: rename helper_buffer to gotoword_buffer
-
-help_buffer = setup_help_buffer(help_buffer_name)
+#App.main()
