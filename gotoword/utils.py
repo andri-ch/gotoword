@@ -2,11 +2,11 @@
 
 
 from storm.locals import *
-try:                        # this ca be eliminated as vim will be available in the namespace that imports this file
-    import vim
-except ImportError:
-    print("vim python module can't be used outside vim editor "
-          "except if you install vimmock python module from PyPI.")
+#try:                        # this ca be eliminated as vim will be available in the namespace that imports this file
+#    import vim
+#except ImportError:
+#    print("vim python module can't be used outside vim editor "
+#          "except if you install vimmock python module from PyPI.")
 
 
 __all__ = ['Keyword', 'Context', 'KeywordContext', 'get_server', 'initialize',

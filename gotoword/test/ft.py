@@ -9,7 +9,7 @@
 #    from os import sys, path
 #    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from os import sys, path
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+sys.path.append(path.dirname(path.dirname(path.dirname(path.abspath(__file__)))))
 
 #import os
 import subprocess as sp
@@ -19,9 +19,10 @@ import thread
 import time
 
 # modules from this plugin
-#from gotoword import gotoword
+from gotoword import gotoword
 
-
+app = gotoword.App()
+app.main()
 # start vim server with GUI, it is better this way because it doesn't mess up
 # the test terminal
 #thread.start_new_thread(sp.call, ("""vim -g -n --servername gotoword ft_test_text""",), {'shell': True})
@@ -43,24 +44,24 @@ HELP_BUFFER = '~/.vim/andrei_plugins/gotoword/helper_buffer'
 
 
 class TestGotoword(unittest.TestCase):
-    def setUp(self):
-        # check if vim server already exists, launch it otherwise
-        #vim_server = sp.check_output("vim --serverlist", shell=True)
-        #if vim_server.strip().lower() != 'gotoword':
-        # start vim server with GUI, it is better this way because it doesn't mess up
-        # the test terminal
-        thread.start_new_thread(sp.call, ("""vim -g -n --servername gotoword ft_test_text""",), {'shell': True})
-        time.sleep(1)
-
-        # check that test file is opened (because tests are based on its
-        # contents) and show the buffer name of the current (active) buffer
-        #filename = sp.check_output("""vim --servername {0} --remote-expr 'bufname("%")'""".format(SERVER), shell=True)
-        #filename = filename.strip()
-        #self.assertEqual(TEST_FILE, filename)
-
-        # source the plugin script
-        sp.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(SERVER, SCRIPT), shell=True)
-        time.sleep(2)
+#    def setUp(self):
+#        # check if vim server already exists, launch it otherwise
+#        #vim_server = sp.check_output("vim --serverlist", shell=True)
+#        #if vim_server.strip().lower() != 'gotoword':
+#        # start vim server with GUI, it is better this way because it doesn't mess up
+#        # the test terminal
+#        thread.start_new_thread(sp.call, ("""vim -g -n --servername gotoword ft_test_text""",), {'shell': True})
+#        time.sleep(1)
+#
+#        # check that test file is opened (because tests are based on its
+#        # contents) and show the buffer name of the current (active) buffer
+#        #filename = sp.check_output("""vim --servername {0} --remote-expr 'bufname("%")'""".format(SERVER), shell=True)
+#        #filename = filename.strip()
+#        #self.assertEqual(TEST_FILE, filename)
+#
+#        # source the plugin script
+#        sp.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(SERVER, SCRIPT), shell=True)
+#        time.sleep(2)
 
     def test_command_Helper(self):
         """

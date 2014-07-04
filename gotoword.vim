@@ -122,10 +122,10 @@ function! s:Help_buffer(word)
 
 python << EOF
 # get function argument
-word = gotoword.vim.eval("a:word")      # get argument by name
+word = app.vim_wrapper.vim.eval("a:word")      # get argument by name
 # word = vim.eval("a:1")                # get argument by position (first one)
 
-keyword = gotoword.update_help_buffer(word)
+keyword = app.vim_wrapper.help_buffer.update(word)
 EOF
 
     let g:loaded_help_buffer = 1
@@ -145,12 +145,12 @@ python << EOF
 # well as the variables defined.
 try:
     # get first positional argument
-    context = gotoword.vim.eval("a:1")
+    context = app.vim_wrapper.vim.eval("a:1")
     context = unicode(context).lower()
 except vim.error:
     context = ''
 
-gotoword.helper_save(context)
+app.helper_save(context)
 #gotoword.helper_save(context, gotoword.store)
 # TODO: gotoword.helper_save(keyword, context, gotoword.store)
 EOF
@@ -164,7 +164,7 @@ function! s:Helper_delete()
     " TODO: what plugin functions need to be run first so that this function can
     " be called? They should be: Helper and/or Helper_save
     " so it should test in vim code for function flags...
-    python gotoword.helper_delete(keyword)
+    python app.helper_delete(keyword)
     "python gotoword.helper_delete(keyword, gotoword.store)
 endfunction
 
@@ -175,10 +175,7 @@ function! s:Helper_all_words()
     
     " TODO: should take optional positional arguments indicating the context
     " like Helper_all_words('python') to display all words in python context
-
-    python gotoword.helper_all_words(gotoword.help_buffer)
-    "python gotoword.helper_all_words(store, help_buffer)
-
+    python app.helper_all_words(app.vim_wrapper.help_buffer)
 endfunction
 
 
@@ -192,8 +189,13 @@ python import sys
 python import vim
 python sys.path.append(vim.eval('expand("<sfile>:h")'))
 " :help sfile
-"python sys.path.append(vim.eval('expand("<sfile>:h")') + 'gotoword')
-"python print vim.eval('expand("<sfile>:h")')
 
-python from gotoword import gotoword, utils
-" or  python gotoword.main(), etc.
+"python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
+"python print vim.eval('expand("<sfile>:h")') + '/gotoword'
+python print sys.path
+
+python <<EOF
+from gotoword import gotoword, utils
+app = gotoword.App()
+app.main()
+EOF
