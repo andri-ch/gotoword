@@ -74,7 +74,7 @@ endif
 
 " TODO: check for python 2 or python 3 if it works only on python3.
 
-
+" prevent vim from loading twice the plugin
 if exists("g:gotoword_loaded")
   finish
 endif
@@ -188,14 +188,24 @@ endfunction
 python import sys
 python import vim
 python sys.path.append(vim.eval('expand("<sfile>:h")'))
+"python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
 " :help sfile
 
-"python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
+" DEBUG
 "python print vim.eval('expand("<sfile>:h")') + '/gotoword'
-python print sys.path
+"python print sys.path
+
+" prevent vim from running the python app if the app is already running
+" remotely (eg. in ipython, etc.)
+if exists("g:gotoword_remote_start")
+  finish
+endif
 
 python <<EOF
-from gotoword import gotoword, utils
+try:
+    from gotoword import gotoword, utils
+except ImportError:
+    import gotoword, utils
 app = gotoword.App()
 app.main()
 EOF

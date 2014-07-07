@@ -2,6 +2,7 @@
 import os.path
 import sys
 import functools
+import logging
 
 # needed by VimServer class
 import threading
@@ -38,10 +39,34 @@ import gotoword_state_machine
 DB_NAME = 'keywords.db'
 DATABASE = utils.create_database('sqlite:' +
                 os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, DB_NAME)
-           )
+                )
 # Eg: DATABASE = 'sqlite:/home/user/.vim/user_plugins/gotoword/keywords.db'
 STORE = Store(DATABASE)
 # store is a cursor to database wrapped by storm
+
+
+def set_up_logging(default_level):
+    logger = logging.getLogger('Main')
+    # Set default log level; DEBUG -> most detailed level############
+    logger.setLevel(default_level)
+
+    ### SET UP A CONSOLE HANDLER ###
+    # Handlers send the log records (created by loggers) to the appropriate
+    # destination: a console, a file, over the internet, by email, etc.
+
+    console_handler = logging.StreamHandler()       # stream -> sys.stdout
+
+    # Formatters specify the layout of log records in the final output.
+    # Set formatter for Stream Handler to colorize text for the command line.
+    message_format = '%(funcName)s: %(levelname)s - %(message)s'
+    formatter = logging.Formatter(message_format,
+                                  datefmt=None,
+                                  )
+
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    return logger
 
 
 def toggle_activate(f):
@@ -51,7 +76,7 @@ def toggle_activate(f):
     """
     def wrapper_activate(obj, *args, **kwargs):
         # store old buffer
-        user_buf_nr = obj.vim.get_active_buffer()
+        user_buf_nr = obj.vim_wrapper.get_active_buffer()
         # activate the buffer so we can set some buffer options
         obj.vim.command("buffer! %s" % obj.buffer_nr)
         f(obj, *args, **kwargs)
@@ -66,7 +91,8 @@ def toggle_readonly(f):
     def wrapper_readonly(obj, *args, **kwargs):
         # if called repeatedly, remove readonly flag set by previous calls
         obj.vim.command("set noreadonly")
-        res = f(*args, **kwargs)
+        logger.debug("obj: %s, index: %s , value: " % (args))
+        res = f(obj, *args, **kwargs)
         obj.vim.command("set readonly")
         # by setting buffer readonly, we want user to prevent from saving it
         # on harddisk with :w cmd, instead we want user to update the
@@ -79,7 +105,7 @@ def database_operations(f):
     """decorator used to open and close a database connection before each
     call to the wrapped function."""
     # pass decorated func's name, description to wrapper
-    @functools.wraps
+    #@functools.wraps
     def wrapper_operations(*args, **kwargs):
         # reopen database connection
         STORE._connection = STORE.get_database().connect()
@@ -93,12 +119,14 @@ def database_operations(f):
 
 class VimServer(object):
     """Represents a remote vim server."""
+
     def __init__(self, name, filename=''):
+        self.name = name
+        self.buffers = VimBuffers(vim=self)
         # vim server needs to be started in a subprocess:
         # subprocess.call("vim -g -n --servername GOTOWORD", shell=True)
         # start vim subprocess in a new thread in order not to block this
         # script:
-        self.name = name
         server = threading.Thread(
             name=name,
             target=subprocess.call,
@@ -106,7 +134,6 @@ class VimServer(object):
             kwargs={'shell': True}
         )
         server.start()
-        print("I am a blocking thread? Why's that so?")
         # allow vim enough time to start as server, to avoid messages like:
         # E247: no registered server named "GOTOWORD": Send expression failed.
         # E247: no registered server named "GOTOWORD": Send failed.
@@ -119,6 +146,12 @@ class VimServer(object):
                 time.sleep(1)
             else:
                 break
+        # set flag that indicates that python app is running outside of vim
+        # editor so next, when we're sourcing the script app won't be
+        # initialized inside vim editor:
+        #subprocess.call("""vim --servername {0} --remote-send ':let g:gotoword_remote_start = 1 <Enter>'""".format(
+        #    name), shell=True)
+
         # source the plugin script
         subprocess.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(
             name, SCRIPT), shell=True)
@@ -127,8 +160,7 @@ class VimServer(object):
         # TODO: get rid of these lines
         # enable this obj for toggle_activate() and other decorators
         #self.vim = self
-        # get all lines from buffer as a list
-        #self._buffer = self.eval('getline(1, "$")').split()
+        # activate help buffer...
 
 
     def command(self, cmd):
@@ -148,33 +180,50 @@ class VimServer(object):
             self.name, expr), shell=True).strip()
         return res
 
-   # # TODO: are __setitem__ and __getitem__ neccessary?
-   # def __setitem__(self, index, value):
-   #     """
-   #     Called when obj[i] = value or obj[i:j] = sequence.
-   #     type(index) = int or slice obj.
-   #     """
-   #     if isinstance(index, int):
-   #         op_succeded = self.eval('setline(%s, "%s")' % (index, value))
-   #         if not op_succeded:
-   #             raise RuntimeError
-   #         # get all lines from buffer as a list
-   #         # vim.eval('getline(1, "$")').split()
-   #     elif isinstance(index, slice):
-   #         start, stop, step = index.indices(len(self._buffer))
-   #         self._buffer[start:stop] = value
-   #         # it seems that _buffer[start:stop:step] is not accepted by the
-   #         # underlying vim buffer
-   #         op_succeded = self.eval('setline(1, "%s")' % (index, self._buffer))
-   #     else:
-   #         raise TypeError("index must be either an int or a slice object")
+    # TODO: are __setitem__ and __getitem__ neccessary?
+#    def __setitem__(self, index, value):
+#        """
+#        Called when obj[i] = value or obj[i:j] = sequence.
+#        type(index) = int or slice obj.
+#        """
+#        if isinstance(index, int):
+#            op_succeded = self.eval('setline(%s, "%s")' % (index, value))
+#            if not op_succeded:
+#                raise RuntimeError
+#            # get all lines from buffer as a list
+#            # vim.eval('getline(1, "$")').split("\n")
+#        elif isinstance(index, slice):
+#            start, stop, step = index.indices(len(self._buffer))
+#            self._buffer[start:stop] = value
+#            # it seems that _buffer[start:stop:step] is not accepted by the
+#            # underlying vim buffer
+#            op_succeded = self.eval('setline(1, "%s")' % (index, self._buffer))
+#        else:
+#            raise TypeError("index must be either an int or a slice object")
 
-   # def __getitem__(self, index):
-   #     """
-   #     type(index) = int or slice obj. Called when var = obj[i:j]
-   #     """
-   #     raise NotImplemented
-   #     #return self._buffer[index]
+
+class VimBuffers(object):
+    """Implements the vim list of buffers."""
+    def __init__(self, vim=None):
+        self._buffer = None
+        self.vim = vim
+
+    def __getitem__(self, index):
+        """
+        type(index) = int or slice obj. Called when var = obj[i:j]
+        """
+        #raise NotImplemented
+        #return self._buffer[index]
+
+        #get the current (active) vim buffer.
+        user_buf_nr = self.vim.eval("winbufnr(0)")
+        # activate helper buffer
+        self.vim.command("buffer! %s" % index)
+        # get all lines from buffer as a list
+        self._buffer = self.vim.eval('getline(1, "$")').split("\n")
+        # reactivate previous buffer
+        self.vim.command("buffer! %s" % user_buf_nr)
+        return self._buffer
 
 
 class App(object):
@@ -193,16 +242,20 @@ class App(object):
     #help_buffer = setup_help_buffer(help_buffer_name)
 
     def __init__(self, vim_wrapper=None):
+        global logger
+        logger = set_up_logging(logging.INFO)
         self.vim = vim_wrapper
         self.keyword = None
         # the current keyword which was displayed in helper buffer
 
     def main(self):
-        """This might be obsolete."""
+        """This is the main entry point of this script."""
+        logger.debug("")
         self.vim_wrapper = VimWrapper(app=self)
         # detect if run inside vim editor and if yes, setup help_buffer
-        if not isinstance(self.vim_wrapper.vim, VimServer):
-            self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
+        #if not isinstance(self.vim_wrapper.vim, VimServer):
+        #    self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
+        self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
 
     @database_operations
     def helper_save(self, context):
@@ -343,6 +396,7 @@ class App(object):
         List all keywords from database into help_buffer.
         """
         # select only the keyword names
+        logger.debug("%s" % help_buffer)
         result = STORE.execute("SELECT name FROM keyword;")
         # dump from generator into a list
         l = result.get_all()
@@ -363,6 +417,7 @@ class App(object):
         [u'canvas', u'color', u'line']
         '''
         self.vim_wrapper.open_window(help_buffer.name)
+        logger.debug("names: %s" % names)
         help_buffer[:] = names
 
 
@@ -385,7 +440,7 @@ class VimWrapper(object):
         except ImportError:
             # script is not called from vim editor so start a vim server;
             # just for testing/development purposes
-            vim = VimServer("GOTOWORD")
+            vim = VimServer("GOTOWORD", "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text")
         self.vim = vim
 
     def get_active_buffer(self):
@@ -414,6 +469,7 @@ class VimWrapper(object):
         #vim.command("split %s" % help_buffer_name)
 
         self.help_buffer = HelperBuffer(buffer_name, self)
+        logger.debug("%s" % self.help_buffer)
 
         # activate the buffer so we can set some buffer options
         self.vim.command("buffer! %s" % self.help_buffer.buffer_nr)
@@ -490,11 +546,12 @@ class HelperBuffer(object):
         word = unicode(word)
         # make it case-insensitive
         word = word.lower()
-
+        logger.debug("before opening window")
         self.vim_wrapper.open_window(self.name)
 
         # look for keyword in DB
-        keyword = utils.find_keyword(self.vim_wrapper.parent.store, word)
+        #keyword = utils.find_keyword(self.vim_wrapper.parent.store, word)
+        keyword = utils.find_keyword(STORE, word)
 
         if keyword:
             # load content in buffer, previous content is deleted
@@ -511,15 +568,15 @@ class HelperBuffer(object):
 
 # TODO: I think _set_buffer & _get_buffer can be safely deleted; nothing uses
 # them
-    def _set_buffer(self, value):
-        """ Called when HelperBuffer_obj = value """
-        self._buffer = value
-
-    def _get_buffer(self):
-        """
-        Called when buffer is read: x = HelperBuffer_obj
-        """
-        return self._buffer
+#    def _set_buffer(self, value):
+#        """ Called when HelperBuffer_obj = value """
+#        self._buffer = value
+#
+#    def _get_buffer(self):
+#        """
+#        Called when buffer is read: x = HelperBuffer_obj
+#        """
+#        return self._buffer
 
     @toggle_activate            # activate it before changing a vim buffer
     @toggle_readonly            # remove any readonly buffer protection
@@ -545,7 +602,5 @@ class HelperBuffer(object):
         return self._buffer[index]
 
 
-############
 ### MAIN ###
-
 #App.main()
