@@ -69,6 +69,9 @@ def set_up_logging(default_level):
     return logger
 
 
+logger = set_up_logging(logging.DEBUG)
+
+
 def toggle_activate(f):
     """
     Activate/focus the helper buffer and then activate/focus again the last
@@ -117,12 +120,35 @@ def database_operations(f):
     return wrapper_operations
 
 
+class VimBuffers(object):
+    """Implements the vim list of buffers."""
+    def __init__(self):
+        self._buffer = None
+
+    def __getitem__(self, index):
+        """
+        type(index) = int or slice obj. Called when var = obj[i:j]
+        """
+        #raise NotImplemented
+        #return self._buffer[index]
+
+        #get the current (active) vim buffer.
+        user_buf_nr = vim.eval("winbufnr(0)")
+        # activate helper buffer
+        vim.command("buffer! %s" % index)
+        # get all lines from buffer as a list
+        self._buffer = vim.eval('getline(1, "$")').split("\n")
+        # reactivate previous buffer
+        vim.command("buffer! %s" % user_buf_nr)
+        return self._buffer
+
+
 class VimServer(object):
     """Represents a remote vim server."""
 
     def __init__(self, name, filename=''):
         self.name = name
-        self.buffers = VimBuffers(vim=self)
+        self.buffers = VimBuffers()
         # vim server needs to be started in a subprocess:
         # subprocess.call("vim -g -n --servername GOTOWORD", shell=True)
         # start vim subprocess in a new thread in order not to block this
@@ -140,6 +166,7 @@ class VimServer(object):
         while True:
             # check server exists
             vim_server = subprocess.check_output("vim --serverlist", shell=True)
+            logger.debug("vim server name: %s" % vim_server)
             if vim_server.strip().lower() != 'gotoword':
                 print("Launched vim server and waiting for it to become available.\n"
                       "Stop this with CTRL + C if nothing happens in 3 or 4 seconds.")
@@ -156,12 +183,6 @@ class VimServer(object):
         subprocess.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(
             name, SCRIPT), shell=True)
         time.sleep(2)
-
-        # TODO: get rid of these lines
-        # enable this obj for toggle_activate() and other decorators
-        #self.vim = self
-        # activate help buffer...
-
 
     def command(self, cmd):
         """Like vim.command()"""
@@ -201,29 +222,18 @@ class VimServer(object):
 #        else:
 #            raise TypeError("index must be either an int or a slice object")
 
-
-class VimBuffers(object):
-    """Implements the vim list of buffers."""
-    def __init__(self, vim=None):
-        self._buffer = None
-        self.vim = vim
-
-    def __getitem__(self, index):
-        """
-        type(index) = int or slice obj. Called when var = obj[i:j]
-        """
-        #raise NotImplemented
-        #return self._buffer[index]
-
-        #get the current (active) vim buffer.
-        user_buf_nr = self.vim.eval("winbufnr(0)")
-        # activate helper buffer
-        self.vim.command("buffer! %s" % index)
-        # get all lines from buffer as a list
-        self._buffer = self.vim.eval('getline(1, "$")').split("\n")
-        # reactivate previous buffer
-        self.vim.command("buffer! %s" % user_buf_nr)
-        return self._buffer
+### import vim python library ###
+try:
+    import vim
+    # the vim module contains everything we need to interact with vim
+    # editor from python, but only when python is used inside vim.
+    # Eg. you can't import vim in ipython like a normal module
+    # More info here:
+    # http://vimdoc.sourceforge.net/htmldoc/if_pyth.html#Python
+except ImportError:
+    # script is not called from vim editor so start a vim server;
+    # just for testing/development purposes
+    vim = VimServer("GOTOWORD", "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text")
 
 
 class App(object):
@@ -242,9 +252,7 @@ class App(object):
     #help_buffer = setup_help_buffer(help_buffer_name)
 
     def __init__(self, vim_wrapper=None):
-        global logger
-        logger = set_up_logging(logging.INFO)
-        self.vim = vim_wrapper
+        self.vim_wrapper = vim_wrapper
         self.keyword = None
         # the current keyword which was displayed in helper buffer
 
@@ -429,25 +437,12 @@ class VimWrapper(object):
     def __init__(self, app=None):
         self.parent = app
         self.help_buffer = None
-        ### import vim python library ###
-        try:
-            import vim
-            # the vim module contains everything we need to interact with vim
-            # editor from python, but only when python is used inside vim.
-            # Eg. you can't import vim in ipython like a normal module
-            # More info here:
-            # http://vimdoc.sourceforge.net/htmldoc/if_pyth.html#Python
-        except ImportError:
-            # script is not called from vim editor so start a vim server;
-            # just for testing/development purposes
-            vim = VimServer("GOTOWORD", "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text")
-        self.vim = vim
 
     def get_active_buffer(self):
         """
         get the current (active) vim buffer.
         """
-        return self.vim.eval("winbufnr(0)")
+        return vim.eval("winbufnr(0)")
 
     def setup_help_buffer(self, buffer_name=''):
         """
@@ -464,7 +459,7 @@ class VimWrapper(object):
         user_buf_nr = self.get_active_buffer()
 
         # create a buffer without opening it in a window
-        self.vim.command("badd %s" % buffer_name)
+        vim.command("badd %s" % buffer_name)
         # create a buffer by opening it in a window
         #vim.command("split %s" % help_buffer_name)
 
@@ -472,17 +467,17 @@ class VimWrapper(object):
         logger.debug("%s" % self.help_buffer)
 
         # activate the buffer so we can set some buffer options
-        self.vim.command("buffer! %s" % self.help_buffer.buffer_nr)
+        vim.command("buffer! %s" % self.help_buffer.buffer_nr)
         # make it a scratch buffer
-        self.vim.command("setlocal buftype=nofile")
-        self.vim.command("setlocal bufhidden=hide")
-        self.vim.command("setlocal noswapfile")
+        vim.command("setlocal buftype=nofile")
+        vim.command("setlocal bufhidden=hide")
+        vim.command("setlocal noswapfile")
         # prevent buffer from being added to the buffer list; can be seen with :ls!
-        self.vim.command("setlocal nobuflisted")
+        vim.command("setlocal nobuflisted")
         # Note: above options can be expressed in only one "setlocal ..." line
 
         # activate the user (initial) buffer
-        self.vim.command("buffer! %s" % user_buf_nr)
+        vim.command("buffer! %s" % user_buf_nr)
 
     def open_window(self, buffer_name):
         """
@@ -491,22 +486,22 @@ class VimWrapper(object):
         """
         # save current global value of 'switchbuf' in order to restore it later
         # and add 'useopen' value to it
-        self.vim.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+        vim.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
 
         # open help buffer
         # 'sbuffer' replaces 'split' because we want to use same buffer window if
         # it exists because sbuffer checks the switchbuf option
-        self.vim.command("sbuffer %s" % buffer_name)
+        vim.command("sbuffer %s" % buffer_name)
 
         # restore switchbuf to its default value in order not to affect other plugin
         # functionality:
-        self.vim.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
+        vim.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
 
         # prevent vim from focusing the helper window created on top, by
         # focusing the last one used (the window used by user before calling this
         # plugin).
         # CTRL-W p   Go to previous (last accessed) window.
-        self.vim.command('call feedkeys("\<C-w>p")')
+        vim.command('call feedkeys("\<C-w>p")')
 
     def close(self):
         """Sends the quit cmd to the vim server."""
@@ -519,16 +514,14 @@ class HelperBuffer(object):
     """
     def __init__(self, buffer_name, vim_wrapper=None):
         self.vim_wrapper = vim_wrapper
-        # vim_wrapper.vim is the exposed interface of the vim editor.
-        self.vim = vim_wrapper.vim
         self.name = buffer_name
         # we need the buffer number assigned by vim so we can get a reference
         # to it that we can later use by indexing vim buffers list.
-        buffer_nr = self.vim.eval('bufnr("%s")' % self.name)
+        buffer_nr = vim.eval('bufnr("%s")' % self.name)
         # vim.eval returns a string that contains a vim list index
         self.buffer_nr = int(buffer_nr)
         # define the internal buffer which is the vim buffer:
-        self._buffer = self.vim.buffers[self.buffer_nr]
+        self._buffer = vim.buffers[self.buffer_nr]
 
     @database_operations
     def update(self, word):

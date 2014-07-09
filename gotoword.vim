@@ -122,7 +122,7 @@ function! s:Help_buffer(word)
 
 python << EOF
 # get function argument
-word = app.vim_wrapper.vim.eval("a:word")      # get argument by name
+word = gotoword.vim.eval("a:word")      # get argument by name
 # word = vim.eval("a:1")                # get argument by position (first one)
 
 keyword = app.vim_wrapper.help_buffer.update(word)
@@ -145,7 +145,7 @@ python << EOF
 # well as the variables defined.
 try:
     # get first positional argument
-    context = app.vim_wrapper.vim.eval("a:1")
+    context = gotoword.vim.eval("a:1")
     context = unicode(context).lower()
 except vim.error:
     context = ''
