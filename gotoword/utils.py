@@ -75,6 +75,9 @@ class Keyword(Storm):
     def __init__(self, name):
         self.name = name
 
+    def __str__(self):
+        return self.name
+
     @classmethod
     def create_table(cls, store):
         '''Create the database table according to class properties.'''
