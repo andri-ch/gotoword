@@ -125,7 +125,7 @@ python << EOF
 word = gotoword.vim.eval("a:word")      # get argument by name
 # word = vim.eval("a:1")                # get argument by position (first one)
 
-keyword = app.vim_wrapper.help_buffer.update(word)
+keyword = app.vim_wrapper.update_buffer(word)
 EOF
 
     let g:loaded_help_buffer = 1
@@ -175,7 +175,7 @@ function! s:Helper_all_words()
     
     " TODO: should take optional positional arguments indicating the context
     " like Helper_all_words('python') to display all words in python context
-    python app.helper_all_words(app.vim_wrapper.help_buffer)
+    python app.helper_all_words()
 endfunction
 
 
