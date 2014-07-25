@@ -10,7 +10,42 @@ import time
 import multiprocessing
 
 ### Third party libs ###
+# for database:
 from storm.locals import Store
+
+
+def set_up_logging(default_level):
+    ### DEBUG -> is the lowest level ###
+
+    msg_format = '[  %(levelname)s  ] %(className)s.%(funcName)s - %(message)s'
+    logging.basicConfig(format=msg_format, level=default_level)
+    logger = logging.getLogger('Main')
+
+    ##  SET UP A HANDLER THAT LOGS TO FILE ###
+    # Handlers send the log records (created by loggers) to the appropriate
+    # destination: a console, a file, over the internet, by email, etc.
+    filename = None
+    # script that is run from vim editor has one log filename, while script
+    # that is run from a python interpreter external to vim editor has
+    # another filename
+    try:
+        import vim
+        filename = "gotoword_vim.log"
+    except ImportError:
+        # this branch is executed when this script is run outside vim editor
+        filename = "gotoword_ipython.log"
+        ### SET UP A CONSOLE HANDLER ###
+        console_handler = logging.StreamHandler()       # stream -> sys.stdout
+        # set level per handler
+        console_handler.setLevel(logging.INFO)
+        logger.addHandler(console_handler)
+        # this handler outputs debug messages although level is info
+
+    file_handler = logging.FileHandler(filename=filename, mode='w')
+    logger.addHandler(file_handler)
+    return logger
+
+logger = set_up_logging(logging.DEBUG)
 
 
 VIM_FOLDER = os.path.expanduser('~/.vim')
@@ -18,7 +53,7 @@ VIM_FOLDER = os.path.expanduser('~/.vim')
 PLUGINS_FOLDER = 'andrei_plugins'
 # PLUGINS_FOLDER can be any of "plugin", "autoload", etc.
 # TODO: decide in which plugin folder is more appropriate to install this
-# plugin
+# plugin and you might get rid of all these constants or put them in a dict
 PLUGIN_NAME = 'gotoword'
 PYTHON_PACKAGE = 'gotoword'
 
@@ -30,7 +65,8 @@ SCRIPT = os.path.join(PLUGIN_PATH, 'gotoword.vim')
 # the python path when these lines are executed is the path of the currently
 # active buffer (vim.current.buffer) in which this code is executed
 # So, to import our own libs, we have to add them to python path.
-sys.path.insert(1, os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE))
+SOURCE_DIR = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE)
+sys.path.insert(1, SOURCE_DIR)
 # Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
 import utils               # should be replaced by import utils
 import gotoword_state_machine
@@ -44,41 +80,19 @@ DATABASE = utils.create_database('sqlite:' +
 STORE = Store(DATABASE)
 # store is a cursor to database wrapped by storm
 
-
-def set_up_logging(default_level):
-    ### DEBUG -> is the lowest level ###
-
-    msg_format = '[  %(levelname)s  ] %(className)s.%(funcName)s - %(message)s'
-    logging.basicConfig(format=msg_format, level=default_level)
-    ### SET UP A CONSOLE HANDLER ###
-    # Handlers send the log records (created by loggers) to the appropriate
-    # destination: a console, a file, over the internet, by email, etc.
-
-    console_handler = logging.StreamHandler()       # stream -> sys.stdout
-    # set level per handler
-    console_handler.setLevel(logging.INFO)
-
-    ##  SET UP A HANDLER THAT LOGS TO FILE ###
-    filename = None
-    # script that is run from vim editor has one log filename, while script
-    # that is run from a python interpreter external to vim editor has
-    # another filename
-    try:
-        import vim
-        filename = "gotoword_vim.log"
-    except ImportError:
-        # this branch is executed when this script is run outside vim editor
-        filename = "gotoword_ipython.log"
-
-    file_handler = logging.FileHandler(filename=filename, mode='w')
-
-    logger = logging.getLogger('Main')
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
-    return logger
-
-logger = set_up_logging(logging.DEBUG)
-
+logger.debug("Following constants are defined: \n"
+             "\t\t VIM_FOLDER: %s \n"
+             "\t\t PLUGINS_FOLDER: %s \n"
+             "\t\t PLUGIN_NAME: %s \n"
+             "\t\t PYTHON_PACKAGE: %s \n"
+             "\t\t PLUGIN_PATH: %s \n"
+             "\t\t SCRIPT: %s \n"
+             "\t\t SOURCE_DIR: %s \n"
+             "\t\t DATABASE: %s \n" %
+             (VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE,
+             PLUGIN_PATH, SCRIPT, SOURCE_DIR, DATABASE),
+             extra={'className': ""}
+             )
 
 def create_vim_list(values):
     """creates the vim editor equivalent of repr(a_vim_list).
@@ -183,15 +197,21 @@ def database_operations(f):
 
 class VimBuf(object):
     """
-    Emulate a vim buffer.
+    Emulate a vim buffer whose index has the value received in the constructor.
+    An instance of this class can read and write lines to the vim buffer it
+    emulates.
+
     A vim buffer partially behaves like a list, so this class
     wraps a python list, but will take into account that buffer line indexing
     starts from 1, not from 0 like in a python list.
 
-    Eg:
+    Eg::
+
         buf = VimBuf(index)
-        buf[1]    should output first line of vim buffer, not second line
-                  like a python list would.
+        buf[1]
+        # should output first line of vim buffer, not second line
+        # like a python list would.
+
     """
     def __init__(self, index):
         # store the vim index (buffer number) of the vim buffer that
@@ -247,7 +267,7 @@ class VimBuf(object):
         # log when it enters function
         logger.debug("", extra={'className': strip(self.__class__)})
         # define flag for succesful operation
-        succeded = False
+        exit_code = '1'            # 0 is True, 1 is False
 
         value = create_vim_list(value)
         # we do this because when type(index) == int we can assign one line
@@ -259,7 +279,7 @@ class VimBuf(object):
             # TODO: catch IndexError when index is just one unit bigger than
             # last index and append to list to emulate vim behaviour.
             #self._buffer[index] = value
-            succeded = vim.eval('setline(%s, %s)' % (index + 1, value))
+            exit_code = vim.eval('setline(%s, %s)' % (index + 1, value))
             # setline's 1st arg is incremented because buffer indexing starts
             # from 1
             #succeded = vim.eval('setline(2, "test - a vim string")')
@@ -276,7 +296,7 @@ class VimBuf(object):
             if not isinstance(value, list):
                 raise TypeError("value must be a list of strings not a %s" %
                                 type(value))
-            succeded = vim.eval('setline(%s, %s)' % (start + 1, value))
+            exit_code = vim.eval('setline(%s, %s)' % (start + 1, value))
             # there are two ways to feed text to setline();
             # as above, by creating a list:
             # setline(index, ["line 1", "line 2"])
@@ -286,7 +306,7 @@ class VimBuf(object):
         else:
             raise TypeError("index must be either an int or a slice object")
 
-        if not succeded:
+        if exit_code != '0':
             logger.debug("didn't manage to update buffer in vim server with "
                          "value %s" % value, extra={'className': strip(self.__class__)})
 
@@ -344,8 +364,9 @@ class VimServer(object):
     """Represents a remote vim server. It tries to implement the same
     interface as the python vim module provided by the python interpreter
     used by vim editor.
-    Eg:
-        vim = VimServer()
+    Eg::
+
+        vim = VimServer(server1, filename="path_to_file")
         # the following is possible:
         vim.buffers
         etc.
@@ -353,47 +374,74 @@ class VimServer(object):
     def __init__(self, name, filename=''):
         self.name = name
         self.buffers = VimBuffers()
-        logger.debug("gotoword pid: %s" % os.getpid(), extra={'className': strip(self.__class__)})
+        logger.debug("", extra={'className': strip(self.__class__)})
         # vim server needs to be started in a subprocess:
         # subprocess.call("vim -g -n --servername GOTOWORD", shell=True)
         # start vim subprocess in a new thread in order not to block this
         # script:
-        server = multiprocessing.Process(
+        self.server = multiprocessing.Process(
             name=name,
             target=subprocess.call,
-            args=("vim -g -n --servername %s %s" % (name, filename),),
-            kwargs={'shell': True}
+            args=(['vim', '-g', '-n', '--servername', name, filename],),
+            #args=(['vim', '-g', '-n', '--servername %s %s' % (name, filename)],),
+            #args=("vim -g -n --servername %s %s" % (name, filename),),
+            #kwargs={'shell': True}
         )
         # if filename is False, vim will open a new document
 
-        server.start()
+    def start(self, timeout=5):
+        """Starts the vim server in a new process. Waits for server to become
+        active timeout seconds.
+        """
+        self.server.start()
         # allow vim enough time to start as server, to avoid messages like:
         # E247: no registered server named "GOTOWORD": Send expression failed.
         # E247: no registered server named "GOTOWORD": Send failed.
-        while True:
-            # check server exists
-            vim_server = subprocess.check_output("vim --serverlist", shell=True)
-            logger.debug("vim server name: %s" % vim_server, extra={'className': strip(self.__class__)})
-            if vim_server.strip().lower() != 'gotoword':
-                print("Launched vim server and waiting for it to become available.\n"
-                      "Stop this with CTRL + C if nothing happens in 3 or 4 seconds.")
-                time.sleep(1)
-            else:
+        while timeout:
+            if self.is_running('gotoword'):
                 break
+            else:
+                time.sleep(1)
+                timeout -= 1
+        else:
+            print("Could not connect to vim server before timeout expired")
+            sys.exit()
+
         # set flag that indicates that python app is running outside of vim
-        # editor so next, when we're sourcing the script app won't be
+        # editor so next, when we're sourcing the script, the app won't be
         # initialized inside vim editor:
         #subprocess.call("""vim --servername {0} --remote-send ':let g:gotoword_remote_start = 1 <Enter>'""".format(
         #    name), shell=True)
 
-        # source the plugin script
-        subprocess.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(
-            name, SCRIPT), shell=True)
+    def is_running(self, name=''):
+        """Checks if there's a running Vim instance with the server's name.
+
+        Returns a Boolean.
+        """
+        server_list = subprocess.check_output("vim --serverlist",
+                                              shell=True).split("\n")
+        logger.debug("vim server(s): %s" % server_list,
+                     extra={'className': strip(self.__class__)})
+        return name.lower() in map(str.lower, server_list)
+
+    def source(self, script):
+        """Source a script in Vim server.
+
+        script - a filename with an absolute path
+        """
+        #subprocess.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(
+        #    self.name, script, shell=True))
+        subprocess.call(['vim', '--servername', self.name, '--remote-send', ':source %s <Enter>' % script])
         time.sleep(2)
 
+    def terminate(self):
+        """Sends SIGTERM to process.
+        Calls multiprocessing.Process.terminate()."""
+        self.server.terminate()
+
     def command(self, cmd):
-        """Like vim.command(), used for vim cmds and everything except for
-        calling functions.
+        """Used for vim cmds and everything except for calling functions.
+        A wrapper around --remote-send.
         """
         # TODO: eval & command should adapt depending on editor or vim server.
         # We just send the command in an underlying shell to the vim server
@@ -403,7 +451,9 @@ class VimServer(object):
             self.name, cmd), shell=True)
 
     def eval(self, expr):
-        """Like vim.eval(), mainly used to call vim functions."""
+        """Like vim.eval(), mainly used to call vim functions.
+        A wrapper around --remote-expr.
+        """
         # Eg. vim --servername GOTOWORD --remote-expr 'bufwinnr(1)'
         res = subprocess.check_output(
             """vim --servername {0} --remote-expr '{1}'""".format(
@@ -422,7 +472,11 @@ try:
 except ImportError:
     # script is not called from vim editor so start a vim server;
     # just for testing/development purposes
-    vim = VimServer("GOTOWORD", "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text")
+    test_file = os.path.expanduser(
+        "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text")
+    vim = VimServer("GOTOWORD", test_file)
+    # this should belong to a testing module for vim and should be part of
+    # setup in a unittest class
 
 
 class App(object):
@@ -732,6 +786,7 @@ class VimWrapper(object):
 
     def close(self):
         """Sends the quit cmd to the vim server."""
+        # should call vim server's terminate() method.
         pass
 
 
