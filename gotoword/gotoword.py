@@ -94,10 +94,12 @@ logger.debug("Following constants are defined: \n"
              extra={'className': ""}
              )
 
+
 def create_vim_list(values):
-    """creates the vim editor equivalent of repr(a_vim_list).
-    >>> create_vim_list(['first line', 'second line'])
-    '["first line", "second line"]'
+    """creates the Vim editor equivalent of python's repr(a_list).
+
+        >>> create_vim_list(['first line', 'second line'])
+        '["first line", "second line"]'
 
     We need double quotes not single quotes.
     This result can be fed to vim's eval function to create a list in vim.
@@ -111,25 +113,27 @@ def create_vim_list(values):
 def strip(s):
     """Used to stringify and then strip a class name accessed using obj.__class__
     so that it is suitable for pretty printing.
-    This function will be used like this:
-    print("this is class %s " % strip(obj.__class__))
+    This function will be used like this::
 
-    This function is needed because:
-    >>> type(s)
-    type
+        >>> print("this is class %s " % strip(obj.__class__))
+        'this is class module.Class'
+
+    Without this function the output would look like this::
+
+        'this is class <class 'module.Class'>
+
+    This function is needed because::
+
+        >>> obj.__class__
+        module.Class
+        >>> print(obj.__class__)
+        <class 'module.Class'>
+        >>> type(s)
+        type
 
     so obj.__class__ is not 'str' but of type 'type' , so we need to call
-    repr(s) to get the string notation.
-
-    Eg:
-    >>> obj.__class__
-    gotoword.VimBuf
-    >>> print(obj.__class__)
-    <class 'gotoword.VimBuf'>
-
-    but we want nicer output:
-    >>> strip(obj.__class__)
-    'gotoword.VimBuf'
+    repr(s) to get the string notation and get rid of the characters we don't
+    want.
     """
     return repr(s).lstrip("<class '").rstrip("'>")
 
@@ -383,11 +387,8 @@ class VimServer(object):
             name=name,
             target=subprocess.call,
             args=(['vim', '-g', '-n', '--servername', name, filename],),
-            #args=(['vim', '-g', '-n', '--servername %s %s' % (name, filename)],),
-            #args=("vim -g -n --servername %s %s" % (name, filename),),
-            #kwargs={'shell': True}
         )
-        # if filename is False, vim will open a new document
+        # if filename is empty, Vim will open a new document
 
     def start(self, timeout=5):
         """Starts the vim server in a new process. Waits for server to become
@@ -418,8 +419,8 @@ class VimServer(object):
 
         Returns a Boolean.
         """
-        server_list = subprocess.check_output("vim --serverlist",
-                                              shell=True).split("\n")
+        server_list = subprocess.check_output(["vim", "--serverlist"]
+                                              ).split("\n")
         logger.debug("vim server(s): %s" % server_list,
                      extra={'className': strip(self.__class__)})
         return name.lower() in map(str.lower, server_list)
@@ -440,24 +441,30 @@ class VimServer(object):
         self.server.terminate()
 
     def command(self, cmd):
-        """Used for vim cmds and everything except for calling functions.
+        """Send commands to a Vim server.
+        Used for Vim cmds and everything except for calling functions.
         A wrapper around --remote-send.
         """
-        # TODO: eval & command should adapt depending on editor or vim server.
-        # We just send the command in an underlying shell to the vim server
+        # We just send the command to the vim server
         # Eg: vim --servername GOTOWORD --remote-send ':qa! <Enter>'
+        #subprocess.call(
+        #    """vim --servername {0} --remote-send ':{1} <Enter>'""".format(
+        #    self.name, cmd), shell=True)
         subprocess.call(
-            """vim --servername {0} --remote-send ':{1} <Enter>'""".format(
-            self.name, cmd), shell=True)
+            ['vim', '--servername', self.name, '--remote-send',
+             ':%s <Enter>' % cmd]
+        )
 
     def eval(self, expr):
-        """Like vim.eval(), mainly used to call vim functions.
+        """Like vim.eval(), mainly used to call Vim functions.
         A wrapper around --remote-expr.
         """
         # Eg. vim --servername GOTOWORD --remote-expr 'bufwinnr(1)'
+        #res = subprocess.check_output(
+        #    """vim --servername {0} --remote-expr '{1}'""".format(
+        #    self.name, expr), shell=True).strip()
         res = subprocess.check_output(
-            """vim --servername {0} --remote-expr '{1}'""".format(
-            self.name, expr), shell=True).strip()
+            ['vim', '--servername', self.name, '--remote-expr', expr]).strip()
         return res
 
 
@@ -473,10 +480,16 @@ except ImportError:
     # script is not called from vim editor so start a vim server;
     # just for testing/development purposes
     test_file = os.path.expanduser(
-        "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text")
+        "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text"
+    )
     vim = VimServer("GOTOWORD", test_file)
     # this should belong to a testing module for vim and should be part of
     # setup in a unittest class
+
+    # TODO:
+    # toggle_activate, toggle_readonly should be part of vim client server
+    # get_active_buffer, setup_help_buffer, open_window should be part of
+    # vim client.
 
 
 class App(object):

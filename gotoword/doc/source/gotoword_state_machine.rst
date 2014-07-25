@@ -3,25 +3,22 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to gotoword's documentation!
+gotoword_state_machine.py 
 ====================================
 
-Contents:
+.. Contents:
 
 .. toctree::
    :maxdepth: 2
 
-   utils
-   gotoword_state_machine
 
-.. automodule:: gotoword
+.. automodule:: gotoword_state_machine
    :members:
 
+..  Indices and tables
+    ==================
 
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+    * :ref:`genindex`
+    * :ref:`modindex`
+    * :ref:`search`
 

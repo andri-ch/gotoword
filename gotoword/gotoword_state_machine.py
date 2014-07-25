@@ -62,6 +62,8 @@ class StateMachine:
 
 
 def start_transitions(txt=''):
+    # TODO: give vim as arg to this fct. so this module doesn't need to import
+    # vim
     '''Handler for 'Start' state. Handles input in order to advance to
     next state.'''
 

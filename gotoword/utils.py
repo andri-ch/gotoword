@@ -34,31 +34,32 @@ class Keyword(Storm):
     name - is the keyword itself, like "button", etc; it should be unique in DB
     cmd - will be run to obtain info about the keyword, like reading a man page,
     info - usually an user edited field, this is where the user personalizes
-           the definition.
+    the definition.
 
     to learn faster, enable debugging:
-    >>> import sys
-    >>> from storm.tracer import debug
-    >>> debug(True, stream=sys.stdout)
-    to disable, do
-    >>> debug(False)
 
-    >>> from storm.locals import *
-    create or open an existing db
-    >>> database = create_database("sqlite:keyword.db")
-    On linux, use 'sqlitebrowser' utility to graphically browse the db.
-    >>> store = Store(database)
-    create the table which will hold instances of Keyword class
-    >>> store.execute("CREATE TABLE keyword "
-                      "(id INTEGER PRIMARY KEY, name VARCHAR not NULL, cmd VARCHAR, info VARCHAR)")
-    define a keyword to add to the table
-    >>> keyword1 = Keyword(name=u'canvas')
-    >>> keyword1.info = u"Define a canvas section in which you can add Graphics instructions that define how the widget is rendered."
-    >>> store.add(keyword1)
-    find a keyword with a known name:
-    >>> keyword = store.find(Keyword, Keyword.name == u'canvas').one()
-    save all stuff
-    >>> store.commit()
+        >>> import sys
+        >>> from storm.tracer import debug
+        >>> debug(True, stream=sys.stdout)
+        to disable, do
+        >>> debug(False)
+
+        >>> from storm.locals import *
+        create or open an existing db
+        >>> database = create_database("sqlite:keyword.db")
+        On linux, use 'sqlitebrowser' utility to graphically browse the db.
+        >>> store = Store(database)
+        create the table which will hold instances of Keyword class
+        >>> store.execute("CREATE TABLE keyword "
+                          "(id INTEGER PRIMARY KEY, name VARCHAR not NULL, cmd VARCHAR, info VARCHAR)")
+        define a keyword to add to the table
+        >>> keyword1 = Keyword(name=u'canvas')
+        >>> keyword1.info = u"Define a canvas section in which you can add Graphics instructions that define how the widget is rendered."
+        >>> store.add(keyword1)
+        find a keyword with a known name:
+        >>> keyword = store.find(Keyword, Keyword.name == u'canvas').one()
+        save all stuff
+        >>> store.commit()
     '''
     __storm_table__ = "keyword"
     id = Int(primary=True)
@@ -140,8 +141,10 @@ class Context(Storm):
 class KeywordContext(Storm):
     '''Helps in creating a many-to-many relationship.
     To create it in DB use:
-    >>> store.execute("CREATE TABLE keyword_context(context_id INTEGER,"
-                      "keyword_id INTEGER, PRIMARY KEY (context_id, keyword_id))")
+
+        >>> store.execute("CREATE TABLE keyword_context(context_id INTEGER,"
+                          "keyword_id INTEGER, PRIMARY KEY (context_id, keyword_id))")
+
     Notice the syntax for a composed primary key
     '''
     __storm_table__ = "keyword_context"
@@ -185,9 +188,9 @@ def load_keywords_store(database):
     This function should be ran when the plugin is loaded.
 
     database - a string of the form SCHEME:PATH where:
-         scheme - sqlite, postgresql, mysql, etc.
-         path - it can be an absolute path.
-             eg. '/home/user1/data.db' or 'data.db' for file in current dir.
+    scheme - sqlite, postgresql, mysql, etc.
+    path - it can be an absolute path.
+    eg. '/home/user1/data.db' or 'data.db' for file in current dir.
     '''
     database = create_database(database)
     store = Store(database)
