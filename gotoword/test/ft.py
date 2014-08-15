@@ -9,154 +9,140 @@
 #    from os import sys, path
 #    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from os import sys, path
-sys.path.append(path.dirname(path.dirname(path.dirname(path.abspath(__file__)))))
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
-#import os
-import subprocess as sp
+import os
 import unittest
-
-import thread
 import time
 
-# modules from this plugin
-from gotoword import gotoword
+from vimrunner import Server
 
-app = gotoword.App()
-app.main()
 # start vim server with GUI, it is better this way because it doesn't mess up
 # the test terminal
-#thread.start_new_thread(sp.call, ("""vim -g -n --servername gotoword ft_test_text""",), {'shell': True})
-
+# OR
 # start vim server inside terminal
-#thread.start_new_thread(sp.call, ("""vim -n --servername gotoword ft_test_text""",), {'shell': True})
-#time.sleep(1)
+
+# the following tests are performed on a test database
 
 SERVER = 'gotoword'
 TEST_FILE = 'ft_test_text'
 PLUGIN_PATH = path.dirname(path.dirname(path.dirname(path.abspath(__file__))))
 #print(PLUGIN_PATH)
-SCRIPT = path.join(PLUGIN_PATH, 'gotoword.vim')
+SCRIPT = 'gotoword.vim'
 
-HELP_BUFFER = '~/.vim/andrei_plugins/gotoword/helper_buffer'
-
-# didn't use these global vars all the time because sometimes it is more
-# elegant to read the untouched bash commands.
+HELP_BUFFER = 'gotoword_buffer'
+#HELP_BUFFER = '~/.vim/andrei_plugins/gotoword/helper_buffer'
 
 
 class TestGotoword(unittest.TestCase):
-#    def setUp(self):
-#        # check if vim server already exists, launch it otherwise
-#        #vim_server = sp.check_output("vim --serverlist", shell=True)
-#        #if vim_server.strip().lower() != 'gotoword':
-#        # start vim server with GUI, it is better this way because it doesn't mess up
-#        # the test terminal
-#        thread.start_new_thread(sp.call, ("""vim -g -n --servername gotoword ft_test_text""",), {'shell': True})
-#        time.sleep(1)
-#
-#        # check that test file is opened (because tests are based on its
-#        # contents) and show the buffer name of the current (active) buffer
-#        #filename = sp.check_output("""vim --servername {0} --remote-expr 'bufname("%")'""".format(SERVER), shell=True)
-#        #filename = filename.strip()
-#        #self.assertEqual(TEST_FILE, filename)
-#
-#        # source the plugin script
-#        sp.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(SERVER, SCRIPT), shell=True)
-#        time.sleep(2)
+    def setUp(self):
+        # start vim as a server
+        self.vim = Server(name=SERVER)
+        self.client = self.vim.start_gvim()
+        # client = self.vim.start()
+
+        # setup your plugin in the vim instance
+        self.client.add_plugin(PLUGIN_PATH, SCRIPT)
+        # edit test file
+        self.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
+                                      TEST_FILE))
 
     def test_command_Helper(self):
         """
         tests if :Helper vim command opens the description of the word under cursor.
         """
-        # check helper_buffer exists and retrieve its index from the buffer list
-        buffer_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufnr("{1}")'""".format(
-            SERVER, HELP_BUFFER), shell=True).strip()
-        self.assertGreater(int(buffer_nr), 1)
-        # helper buffer index is greater than 1 because the file opened for
-        # editing usually has index 1
+        # test a vim buffer is opened for test file
+        self.assertTrue(TEST_FILE in self.client.command('ls'))
+        # List the user-defined commands that start with Helper
+        out = self.client.command('command Helper')
+        # out is something like:
+        #     Name        Args Range Complete  Definition
+        #     Helper      0                    call s:Help_buffer(expand("<cword>"))
+        #     HelperAllWords 0                    call s:Helper_all_words()
 
-        # -------------------------
-        # show definition of 'canvas'; check helper buffer is shown in window
-        # -------------------------
+        # so split at newlines and remove first line (Name Args...)
+        out = out.split("\n")[1:]
+        out = map(str.strip, out)
+        # >>> type(out)
+        # list
 
-        # search for the word in document; position the cursor at the start of the word if
-        # it's found
-        line_nr = sp.check_output("""vim --servername {0} --remote-expr 'search("{1}")'""".format(
-            SERVER, 'canvas'), shell=True).strip()
-        self.assertGreater(int(line_nr), 0)
-        # line number is 0 if nothing is found by search(); if pattern is
-        # found, move the cursor there and return the line number
+        # extract the command names by splitting each text line
+        cmds = [elem[0] for elem in map(str.split, out)]
+        # check all plugin commands exist
+        self.assertTrue('Helper' in cmds)
+        self.assertTrue('HelperSave' in cmds)
+        self.assertTrue('HelperDelete' in cmds)
+        self.assertTrue('HelperAllWords' in cmds)
 
-        # :Helper
-        sp.call("""vim --servername {0} --remote-send ':Helper <Enter>'""".format(
-            SERVER), shell=True)
+        # call Vim function search("canvas", 'w') to search top-bottom
+        # for a keyword we know is defined and has a definition in database
+        line_nr = self.client.search('canvas', flags='w')
+        # if there is no match 0 is returned
+        self.assertNotEqual('0', line_nr)
 
-        # Check helper buffer is open in its own window
-        window_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufwinnr({1})'""".format(
-            SERVER, buffer_nr), shell=True).strip()
+        # test Helper command is working
+        self.client.command('Helper')
+        time.sleep(1)
+        # check the Helper cmd opens gotoword buffer
+        buffers = self.client.command('ls!')
+        # r is similar to:
+        # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
+        #  2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
+        self.assertTrue(HELP_BUFFER in buffers)
+        # get buffer index and name:
+        buffers = buffers.split("\n")
+        buffers = map(str.strip, buffers)
+        buf = [buf_info for buf_info in buffers if HELP_BUFFER in buf_info]
+        buf = buf.pop()
+        # >>> buf
+        # '2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
+        buffer_index = buf[0]
+        buffer_name = buf[1]
+        # check that the correct help text is displayed in gotoword buffer
+        info = self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
+        # >>> info
+        # 'Define a canvas section in which you can add Graphics instructions that define how the widget is rendered.'
+        self.assertTrue('Define a canvas section' in info)
+
+        # Check helper buffer is opened in its own window
+        window_nr = self.client.eval('bufwinnr(%s)' % buffer_index)
         # if the buffer or no window exists for it, -1 is returned by bufwinnr()
         self.assertNotEqual(int(window_nr), -1)
-
-        # check if definition corresponds to its word
-        info = sp.check_output("""vim --servername {0} --remote-expr 'getbufline({1}, 1)'""".format(
-            SERVER, buffer_nr), shell=True).strip()
-        self.assertEqual('Define a canvas', info[:15])
 
         # -------------------------
         # show that 'rgb' doesn't exist in database
         # -------------------------
         # locate it in current document
-        line_nr = sp.check_output("""vim --servername {0} --remote-expr 'search("{1}")'""".format(
-            SERVER, 'rgb'), shell=True).strip()
-        self.assertGreater(int(line_nr), 0)
+        line_nr = self.client.search('rgb', flags='w')
+        self.assertNotEqual('0', line_nr)
 
-        # :Helper
-        sp.call("""vim --servername {0} --remote-send ':Helper <Enter>'""".format(
-            SERVER), shell=True)
+        # display help text in Help buffer about "rgb"
+        self.client.command('Helper')
 
-        window_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufwinnr({1})'""".format(
-            SERVER, buffer_nr), shell=True).strip()
-        # if the buffer or no window exists for it, -1 is returned by bufwinnr()
-        self.assertNotEqual(int(window_nr), -1)
+        # check if definition informs user that word doesn't exist in database
+        info = self.client.eval('getbufline(%s, 1)' % buffer_index)
+        self.assertTrue('"rgb" doesn\'t exist' in info)
 
-        # check if definition corresponds to its word
-        info = sp.check_output("""vim --servername {0} --remote-expr 'getbufline({1}, 1)'""".format(
-            SERVER, buffer_nr), shell=True).strip()
-        self.assertEqual('"rgb" doesn\'t exist', info[12:31])
+        # check :HelperAllWords works after :Helper or other command
+        self.client.command('HelperAllWords')
+        time.sleep(1)
 
-        # :HelperAllWords
-        sp.call("""vim --servername {0} --remote-send ':HelperAllWords <Enter>'""".format(
-            SERVER), shell=True)
+        # check all words from database are displayed, and look for a subset
+        words = self.client.eval('getbufline(%s, 1, 3)' % buffer_index)
+        self.assertEqual(['canvas', 'color', 'test'], words.split("\n"))
 
-        window_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufwinnr({1})'""".format(
-            SERVER, buffer_nr), shell=True).strip()
-        # if the buffer or no window exists for it, -1 is returned by bufwinnr()
-        self.assertNotEqual(int(window_nr), -1)
-
-        # check if definition corresponds to its word
-        info = sp.check_output("""vim --servername {0} --remote-expr 'getbufline({1}, 1, 3)'""".format(
-            SERVER, buffer_nr), shell=True).strip()
-        self.assertEqual(['canvas', 'color', 'test'], info.split())
-
-        time.sleep(5)
-
-    def test_command_HelperAllWords(self):
-        buffer_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufnr("{1}")'""".format(
-            SERVER, HELP_BUFFER), shell=True).strip()
-        self.assertGreater(int(buffer_nr), 1)
-
-        # :HelperAllWords
-        sp.call("""vim --servername {0} --remote-send ':HelperAllWords <Enter>'""".format(
-            SERVER), shell=True)
-
-        window_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufwinnr({1})'""".format(
-            SERVER, buffer_nr), shell=True).strip()
-        # if the buffer or no window exists for it, -1 is returned by bufwinnr()
-        self.assertNotEqual(int(window_nr), -1)
-
-        # check if some buffer lines correspond
-        info = sp.check_output("""vim --servername {0} --remote-expr 'getbufline({1}, 1, 3)'""".format(
-            SERVER, buffer_nr), shell=True).strip()
-        self.assertEqual(['canvas', 'color', 'test'], info.split())
+#    def test_command_HelperAllWords(self):
+#        self.client('HelperAllWords')
+#
+#        window_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufwinnr({1})'""".format(
+#            SERVER, buffer_nr), shell=True).strip()
+#        # if the buffer or no window exists for it, -1 is returned by bufwinnr()
+#        self.assertNotEqual(int(window_nr), -1)
+#
+#        # check if some buffer lines correspond
+#        info = sp.check_output("""vim --servername {0} --remote-expr 'getbufline({1}, 1, 3)'""".format(
+#            SERVER, buffer_nr), shell=True).strip()
+#        self.assertEqual(['canvas', 'color', 'test'], info.split())
 #
 #    def test_command_HelperSave(self):
 #        pass
@@ -166,7 +152,7 @@ class TestGotoword(unittest.TestCase):
 
     def tearDown(self):
         # close vim server
-        sp.call("""vim --servername gotoword --remote-send ':qa! <Enter>'""", shell=True)
+        self.vim.quit()
 
 
 if __name__ == '__main__':
