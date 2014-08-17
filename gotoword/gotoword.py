@@ -199,7 +199,7 @@ def database_operations(f):
     return wrapper_operations
 
 
-class VimBuf(object):
+class VimBuf(object):           # to be deleted?
     """
     Emulate a vim buffer whose index has the value received in the constructor.
     An instance of this class can read and write lines to the vim buffer it
@@ -341,7 +341,7 @@ class VimBuf(object):
         self[len(self._buffer) - 1] = value
 
 
-class VimBuffers(object):
+class VimBuffers(object):         # to be deleted?
     """Implements the vim list of buffers."""
     def __init__(self):
         self._buffer = None
@@ -364,110 +364,6 @@ class VimBuffers(object):
         # TODO: implement it
 
 
-class VimServer(object):
-    """Represents a remote vim server. It tries to implement the same
-    interface as the python vim module provided by the python interpreter
-    used by vim editor.
-    Eg::
-
-        vim = VimServer(server1, filename="path_to_file")
-        # the following is possible:
-        vim.buffers
-        etc.
-    """
-    def __init__(self, name, filename=''):
-        self.name = name
-        self.buffers = VimBuffers()
-        logger.debug("", extra={'className': strip(self.__class__)})
-        # vim server needs to be started in a subprocess:
-        # subprocess.call("vim -g -n --servername GOTOWORD", shell=True)
-        # start vim subprocess in a new thread in order not to block this
-        # script:
-        self.server = multiprocessing.Process(
-            name=name,
-            target=subprocess.call,
-            args=(['vim', '-g', '-n', '--servername', name, filename],),
-        )
-        # if filename is empty, Vim will open a new document
-
-    def start(self, timeout=5):
-        """Starts the vim server in a new process. Waits for server to become
-        active timeout seconds.
-        """
-        self.server.start()
-        # allow vim enough time to start as server, to avoid messages like:
-        # E247: no registered server named "GOTOWORD": Send expression failed.
-        # E247: no registered server named "GOTOWORD": Send failed.
-        while timeout:
-            if self.is_running('gotoword'):
-                break
-            else:
-                time.sleep(1)
-                timeout -= 1
-        else:
-            print("Could not connect to vim server before timeout expired")
-            sys.exit()
-
-        # set flag that indicates that python app is running outside of vim
-        # editor so next, when we're sourcing the script, the app won't be
-        # initialized inside vim editor:
-        #subprocess.call("""vim --servername {0} --remote-send ':let g:gotoword_remote_start = 1 <Enter>'""".format(
-        #    name), shell=True)
-
-    def is_running(self, name=''):
-        """Checks if there's a running Vim instance with the server's name.
-
-        Returns a Boolean.
-        """
-        server_list = subprocess.check_output(["vim", "--serverlist"]
-                                              ).split("\n")
-        logger.debug("vim server(s): %s" % server_list,
-                     extra={'className': strip(self.__class__)})
-        return name.lower() in map(str.lower, server_list)
-
-    def source(self, script):
-        """Source a script in Vim server.
-
-        script - a filename with an absolute path
-        """
-        #subprocess.call("""vim --servername {0} --remote-send ':source {1} <Enter>'""".format(
-        #    self.name, script, shell=True))
-        subprocess.call(['vim', '--servername', self.name, '--remote-send', ':source %s <Enter>' % script])
-        time.sleep(2)
-
-    def terminate(self):
-        """Sends SIGTERM to process.
-        Calls multiprocessing.Process.terminate()."""
-        self.server.terminate()
-
-    def command(self, cmd):
-        """Send commands to a Vim server.
-        Used for Vim cmds and everything except for calling functions.
-        A wrapper around --remote-send.
-        """
-        # We just send the command to the vim server
-        # Eg: vim --servername GOTOWORD --remote-send ':qa! <Enter>'
-        #subprocess.call(
-        #    """vim --servername {0} --remote-send ':{1} <Enter>'""".format(
-        #    self.name, cmd), shell=True)
-        subprocess.call(
-            ['vim', '--servername', self.name, '--remote-send',
-             ':%s <Enter>' % cmd]
-        )
-
-    def eval(self, expr):
-        """Like vim.eval(), mainly used to call Vim functions.
-        A wrapper around --remote-expr.
-        """
-        # Eg. vim --servername GOTOWORD --remote-expr 'bufwinnr(1)'
-        #res = subprocess.check_output(
-        #    """vim --servername {0} --remote-expr '{1}'""".format(
-        #    self.name, expr), shell=True).strip()
-        res = subprocess.check_output(
-            ['vim', '--servername', self.name, '--remote-expr', expr]).strip()
-        return res
-
-
 ### import vim python library ###
 try:
     import vim
@@ -477,14 +373,8 @@ try:
     # More info here:
     # http://vimdoc.sourceforge.net/htmldoc/if_pyth.html#Python
 except ImportError:
-    # script is not called from vim editor so start a vim server;
-    # just for testing/development purposes
-    test_file = os.path.expanduser(
-        "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text"
-    )
-    vim = VimServer("GOTOWORD", test_file)
-    # this should belong to a testing module for vim and should be part of
-    # setup in a unittest class
+    print("script must be run inside vim editor")
+    sys.exit()
 
     # TODO:
     # toggle_activate, toggle_readonly should be part of vim client server

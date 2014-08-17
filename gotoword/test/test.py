@@ -13,21 +13,15 @@ import os.path
 import shutil
 import inspect
 
-try:
-    import vimmock
-    vimmock.patch_vim()
-    import vim
-except ImportError:
-    print("vim python module can't be used outside vim editor "
-          "except if you install vimmock python module from PyPI.")
-
 import unittest
 
 from storm.locals import *
 import storm
 
 ### Own libraries ###
-from gotoword import *
+import gotoword
+from utils import Keyword, Context, create_keyword, update_keyword_info
+#from gotoword import *
 # TODO: get rid of this; you should do: import gotoword; that's it, like import
 # django
 
