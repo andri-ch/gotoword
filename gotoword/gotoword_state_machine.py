@@ -61,41 +61,38 @@ class StateMachine:
                 handler = self.handlers[newState.upper()]
 
 
-def start_transitions(txt=''):
+def start_transitions(cargo):
     # TODO: give vim as arg to this fct. so this module doesn't need to import
     # vim
     '''Handler for 'Start' state. Handles input in order to advance to
     next state.'''
 
-    print("Do you want to specify a context that this definition of the word "
-          "applies in?")
-    message = "[Y]es define it    [N]o do not define it    [A]bort"
-    #print("[Y]es I'll define it    [N]o I won't define it    [A]bort")
-    #answer = vim.eval("")
-    # following vim cmds are needed because:
-    #   http://vim.wikia.com/wiki/User_input_from_a_script
-    vim.command('call inputsave()')
-    # put vim cursor here:
-    vim.command("let user_input = input('" + message + ": ')")
-    vim.command('call inputrestore()')
-    # TODO: how to solve the prompt issue??
-    vim.command('echo')     # make prompt pass to next line, for pretty printing
-    answer = vim.eval('user_input')
-    #answer = 'Y'
+    answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
+            "1. Yes, I will provide a context", \
+            "2. No, I won't provide a context", \
+            "3. Abort"])
+            """)
     answer = answer.upper().strip()
-    if answer.startswith('Y'):
+    if answer.startswith('1'):
         new_state = "read_context_state"
-    elif answer.startswith('N'):
+    elif answer.startswith('2'):
         new_state = "new_keyword_state"
     else:
-        # [A]bort
+        # Abort
         new_state = "end_state"
-    return (new_state, answer)
+    return (new_state, cargo)
 
 
-def read_context_transitions(answer=''):
+def read_context_transitions(cargo):
     print("read_context_state")
-    return ("end_state", answer)
+    # read context from user
+    # create keyword with context:
+    # but for now create it without context
+    func, store, keyword, buf = cargo
+
+    kw = func(store, keyword, buf)
+    print("kw: %s " % kw)
+    return ("end_state", cargo)
 
 
 def end_state(answer):

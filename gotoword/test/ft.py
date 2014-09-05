@@ -46,6 +46,9 @@ class TestGotoword(unittest.TestCase):
         # edit test file
         self.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
                                       TEST_FILE))
+        # prevent vim from opening windows for the same buffer
+        self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+    # create a test DB and populate it with keywords and definitions
 
     def test_command_Helper(self):
         """
@@ -93,11 +96,13 @@ class TestGotoword(unittest.TestCase):
         buffers = buffers.split("\n")
         buffers = map(str.strip, buffers)
         buf = [buf_info for buf_info in buffers if HELP_BUFFER in buf_info]
+        # buf is a one element list, so
         buf = buf.pop()
         # >>> buf
         # '2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
         buffer_index = buf[0]
-        buffer_name = buf[1]
+        buffer_name = buf.split()[2]
+        self.assertNotEqual(buffer_name, '')
         # check that the correct help text is displayed in gotoword buffer
         info = self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
         # >>> info
@@ -123,13 +128,55 @@ class TestGotoword(unittest.TestCase):
         info = self.client.eval('getbufline(%s, 1)' % buffer_index)
         self.assertTrue('"rgb" doesn\'t exist' in info)
 
-        # check :HelperAllWords works after :Helper or other command
-        self.client.command('HelperAllWords')
-        time.sleep(1)
+        # -------------------------
+        # test HelperSave
+        # -------------------------
+        # note that cursor is positioned on 'rgb' word located previously;
+        # gotoword buffer is readonly, to prevent user from accidentally save
+        # it with :w or to edit it with i
+        self.client.command("set noreadonly")
+        # focus/activate Helper buffer by moving to the top window:
+        self.client.feedkeys('\<C-w>k')
+        self.client.command('buffer! %s' % buffer_index)
+        time.sleep(2)
+        # delete default text:
+        self.client.normal('gg')
+        self.client.normal('dG')
+        # add a definition for keyword
+        self.client.insert("This is definition for keyword 'rgb'.")
+        # exist Insert mode:
+        self.client.normal('<ESC>')
+        self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+        # call HelperSave with no context
+        self.client.command('HelperSave')
+        time.sleep(2)
+        ## when prompt requires to answer, insert "1" -> insert context ->
+        self.client.type('1 \<Enter>')
+        ## check definition and keyword are stored in database
+        all_words = self.get_all_keywords(buffer_index)
+        self.assertTrue('rgb' in all_words)
 
-        # check all words from database are displayed, and look for a subset
-        words = self.client.eval('getbufline(%s, 1, 3)' % buffer_index)
-        self.assertEqual(['canvas', 'color', 'test'], words.split("\n"))
+
+        ## -------------------------
+        ## test HelperDelete
+        ## -------------------------
+        ## delete 'rgb' word saved previuosly
+        # HelperDelete deletes the keyword on which Helper was called
+        # which in this case is 'rgb'
+        self.client.command('HelperDelete')
+        # check 'rbg' is deleted
+        all_words = self.get_all_keywords(buffer_index)
+        self.assertTrue('rgb' not in all_words)
+
+        ## -------------------------
+        ## check :HelperAllWords works after :Helper or other command
+        ## -------------------------
+        #self.client.command('HelperAllWords')
+        #time.sleep(1)
+
+        ## check all words from database are displayed, and look for a subset
+        #words = self.client.eval('getbufline(%s, 1, 3)' % buffer_index)
+        #self.assertEqual(['canvas', 'color', 'test'], words.split("\n"))
 
 #    def test_command_HelperAllWords(self):
 #        self.client('HelperAllWords')
@@ -150,9 +197,15 @@ class TestGotoword(unittest.TestCase):
 #    def test_command_HelperDelete(self):
 #        pass
 
-    def tearDown(self):
-        # close vim server
-        self.vim.quit()
+    def get_all_keywords(self, buffer_index):
+        self.client.command('HelperAllWords')
+        return self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
+
+#    def tearDown(self):
+#        # close vim server
+#        self.vim.quit()
+
+
 
 
 if __name__ == '__main__':

@@ -393,9 +393,6 @@ class App(object):
                                     PLUGIN_NAME + '_buffer')
     # help_buffer is created on the fly, in memory, it doesn't exist on disk, but we
     # specify a full path as its name
-    # TODO: rename help_buffer to gotoword_buffer
-
-    #help_buffer = setup_help_buffer(help_buffer_name)
 
     def __init__(self, vim_wrapper=None):
         self.vim_wrapper = vim_wrapper
@@ -431,7 +428,9 @@ class App(object):
         ### debug ###
         if not context:
             print("context is empty")
-            gotoword_state_machine.m.run('start')
+            cargo = (utils.create_keyword, STORE, self.keyword,
+                     self.vim_wrapper.help_buffer)
+            gotoword_state_machine.m.run(cargo)
         else:
             print("context is %s" % context)
 
@@ -522,18 +521,20 @@ class App(object):
         #print("Keyword and its definition were saved in %s context." % context.name)
 
     @database_operations
-    def helper_delete(self, keyword):
+    def helper_delete(self, keyword, context=None):
         """
         this function deletes from DB the keyword whose content in help_buffer
         is displayed;
         in the future, it could delete from DB the word under cursor.
+        context - it deletes only the definition of keyword for a specific
+                  context (#TODO)
         """
 
         # TODO: prompt a question for user to confirm if he wants keyword with name x
         # to be deleted.
         # Edge case: user calls Help_buffer on word, but word doesn't exist so he
         # starts filling the definition, but he changes his mind and wants to delete
-        # the keyword - calls :HelperDelete, because he thinks kw in the db, but it
+        # the keyword - calls :HelperDelete, because he thinks kw is in the db, but it
         # isn't, so db will throw a python storm error. Provide a backup for this...
 
         if keyword:
@@ -578,6 +579,8 @@ class App(object):
 
 
 class VimWrapper(object):
+    # TODO: maybe VimWrapper is not the best name, might create confusion
+    #
     """
     It is an alternative to the vim python module, by implementing it as an
     interface to a vim server, all commands and expressions are sent to it.
@@ -684,6 +687,8 @@ class VimWrapper(object):
             self.help_buffer[:] = utils.introduction_line(word).splitlines()
             # .splitlines() is used because vim buffer accepts at most one "\n"
             # per vim line
+            #keyword = utils.Keyword(name=word)     # conflicts with HelperSave
+            keyword = word
         self.parent.keyword = keyword
         return keyword
 

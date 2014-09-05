@@ -128,7 +128,7 @@ word = gotoword.vim.eval("a:word")      # get argument by name
 keyword = app.vim_wrapper.update_buffer(word)
 EOF
 
-    let g:loaded_help_buffer = 1
+    let g:loaded_Help_buffer = 1
 endfunction
 
 
@@ -137,23 +137,23 @@ function! s:Helper_save(...)             " fct has a variable number of args
     " This way, we reload for each subsequent function call
     if !exists("g:loaded_Help_buffer")
       echo "There is nothing to save. HelperSave needs to be called after Helper command."
-      finish
+      return 
     endif
-
-python << EOF
-# python imports from vim functions run previously are still available, as
-# well as the variables defined.
-try:
-    # get first positional argument
-    context = gotoword.vim.eval("a:1")
-    context = unicode(context).lower()
-except vim.error:
-    context = ''
-
-app.helper_save(context)
-#gotoword.helper_save(context, gotoword.store)
-# TODO: gotoword.helper_save(keyword, context, gotoword.store)
-EOF
+    try
+      " get first positional argument
+      let context = a:1      
+      " python imports from vim functions run previously are still available, 
+      " as well as the variables defined.
+      python context = gotoword.vim.eval("context")
+      python context = unicode(context).lower()
+    "catch /^Vim\%((\a\+)\)\=:E121/
+    catch /.*/           " catch all errors that appear when no args exist
+      python context = ''
+    endtry
+    python app.helper_save(context)
+    " OR
+    " gotoword.helper_save(context, gotoword.store)
+    " TODO: gotoword.helper_save(keyword, context, gotoword.store)
 endfunction
 
 

@@ -19,7 +19,7 @@ from storm.locals import *
 import storm
 
 ### Own libraries ###
-import gotoword
+#import gotoword
 from utils import Keyword, Context, create_keyword, update_keyword_info
 #from gotoword import *
 # TODO: get rid of this; you should do: import gotoword; that's it, like import

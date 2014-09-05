@@ -211,12 +211,14 @@ def create_keyword(store, word, buf):
     '''Creates a new keyword with name=word and updates the database.
     Workflow:
     with cursor on the word that will become a keyword,
-    user calls vim function Helper-create, which opens an empty helper_buffer or
+    user calls vim function Helper, which opens an empty helper_buffer or
     empties the one already open.
     User edits the buffer with info he wants to store as keyword.info or keyword.cmd
-    User saves the contents of the buffer to database by calling HelperSaveCmd or
+    User saves the contents of the buffer to database by calling HelperSave vim cmd or
     HelperSaveInfo which are aliases to HelperSave(flag).
     '''
+    #if not hasattr(word, "name"):
+    #    keyword = Keyword(name=word)
     keyword = Keyword(name=word)
     keyword = store.add(keyword)
     update_keyword_info(store, keyword, buf)
