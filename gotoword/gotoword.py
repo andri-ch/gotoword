@@ -396,6 +396,7 @@ class App(object):
 
     def __init__(self, vim_wrapper=None):
         self.vim_wrapper = vim_wrapper
+        self.word = None
         self.keyword = None
         # the current keyword which will be displayed in helper buffer
         logger.debug("gotoword started from vim pid: %s and parent's: %s" %
@@ -418,21 +419,28 @@ class App(object):
         """
         # initialize state machine to handle case 00
 
+        self.state = EntryState()
+        self.saving = True
+        while self.saving:
+            self.state = self.state.evaluate(self, self.keyword, context)
+            if self.state is None:
+                self.saving = False
+
         #m = gotoword_state_machine.StateMachine()
         #m.add_state("Start", start_transitions)
         #m.add_state("read_context_state", read_context_transitions)
         #m.add_state("end_state", end_state, end_state=1)
-        gotoword_state_machine.m.set_start("Start")
+        ##gotoword_state_machine.m.set_start("Start")
         #m.run('start')
 
         ### debug ###
-        if not context:
-            print("context is empty")
-            cargo = (utils.create_keyword, STORE, self.keyword,
-                     self.vim_wrapper.help_buffer)
-            gotoword_state_machine.m.run(cargo)
-        else:
-            print("context is %s" % context)
+        ##if not context:
+        ##    print("context is empty")
+        ##    cargo = (utils.create_keyword, STORE, self.keyword,
+        ##             self.vim_wrapper.help_buffer)
+        ##    gotoword_state_machine.m.run(cargo)
+        ##else:
+        ##    print("context is %s" % context)
 
         #if context:
         #    # context was specified by the user, so look it up in DB
@@ -442,6 +450,7 @@ class App(object):
         #        context = Context(name=context)
         #else:
         #    pass
+
 
         ### ALL COMBINATIONS ###
         # from the user's point of view - what he types when he executes :HelperSave [context]
@@ -669,13 +678,13 @@ class VimWrapper(object):
         # convert fct. arg to unicode, for python2.x, this is what is stored in the db
         word = unicode(word)
         # make it case-insensitive
-        word = word.lower()
+        self.parent.word = word.lower()
         logger.debug("before opening window", extra={'className': strip(self.__class__)})
         self.open_window(self.parent.help_buffer_name)
 
         # look for keyword in DB
         #keyword = utils.find_keyword(self.vim_wrapper.parent.store, word)
-        keyword = utils.find_keyword(STORE, word)
+        keyword = utils.find_keyword(STORE, self.parent.word)
 
         if keyword:
             # load content in buffer, previous content is deleted
@@ -688,14 +697,62 @@ class VimWrapper(object):
             # .splitlines() is used because vim buffer accepts at most one "\n"
             # per vim line
             #keyword = utils.Keyword(name=word)     # conflicts with HelperSave
-            keyword = word
-        self.parent.keyword = keyword
+            keyword = None
         return keyword
 
     def close(self):
         """Sends the quit cmd to the vim server."""
         # should call vim server's terminate() method.
         pass
+
+
+class EntryState(object):
+    """Makes an initial evaluation of keyword & context and decides which is
+    the next state
+    """
+    def __init__(self):
+        pass
+
+    def evaluate(self, app, kw, context):
+        if not kw and not context:
+            return ReadContextState()
+        else:
+            return None
+
+
+class ReadContextState(object):
+    def evaluate(self, app, kw, context):
+        vim.eval('inputsave()')
+        answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
+                "1. Yes, I will provide a context", \
+                "2. No, I won't provide a context", \
+                "3. Abort"])
+                """)
+        vim.eval('inputrestore()')
+        # debug
+        app.answer = answer
+        # inputlist() is blocking the prompt, waiting for a key from user
+        time.sleep(2)
+        answer = answer.upper().strip()
+        print(answer)
+        vim.command('echo "%s"' % answer)
+        if answer.startswith('1'):
+            # read context ....
+            return NewKeywordState()
+        elif answer.startswith('2'):
+            return NewKeywordState()
+        else:
+            # Abort
+            vim.command('echo "None is returned"')
+            return None
+
+
+class NewKeywordState(object):
+    def evaluate(self, app, kw, context):
+        app.keyword = utils.create_keyword(STORE, app.word,
+                                           app.vim_wrapper.help_buffer)
+        vim.command('echo "keyword %s saved"' % app.keyword.name)
+        return None
 
 
 #### MAIN ###

@@ -117,6 +117,7 @@ endif
 " --------------------------------
 
 function! s:Help_buffer(word)           
+    " TODO: rename this function to Helper
     " fct name always starts with uppercase
     " s: means function is local to script, not part of the global namespace
 
@@ -125,7 +126,7 @@ python << EOF
 word = gotoword.vim.eval("a:word")      # get argument by name
 # word = vim.eval("a:1")                # get argument by position (first one)
 
-keyword = app.vim_wrapper.update_buffer(word)
+app.keyword = app.vim_wrapper.update_buffer(word)
 EOF
 
     let g:loaded_Help_buffer = 1
@@ -164,7 +165,7 @@ function! s:Helper_delete()
     " TODO: what plugin functions need to be run first so that this function can
     " be called? They should be: Helper and/or Helper_save
     " so it should test in vim code for function flags...
-    python app.helper_delete(keyword)
+    python app.helper_delete(app.keyword)
     "python gotoword.helper_delete(keyword, gotoword.store)
 endfunction
 

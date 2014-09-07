@@ -14,6 +14,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import os
 import unittest
 import time
+import multiprocessing
 
 from vimrunner import Server
 
@@ -148,10 +149,18 @@ class TestGotoword(unittest.TestCase):
         self.client.normal('<ESC>')
         self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
         # call HelperSave with no context
+        #p = multiprocessing.Process(target=self.client.command, args=('HelperSave',))
+        #p.start()
         self.client.command('HelperSave')
-        time.sleep(2)
+        time.sleep(1)
         ## when prompt requires to answer, insert "1" -> insert context ->
-        self.client.type('1 \<Enter>')
+        #self.client.type("2")
+        #self.client.feedkeys("1")
+        #self.client.eval("feedkeys('%s')" % "1")
+        #self.client.command('exe "normal 2 \<CR>"')
+
+        #self.client.feedkeys("\<Enter>")
+        #self.client.normal('1 \<Enter>')
         ## check definition and keyword are stored in database
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' in all_words)
