@@ -77,6 +77,7 @@ class TestGotoword(unittest.TestCase):
         self.assertTrue('HelperSave' in cmds)
         self.assertTrue('HelperDelete' in cmds)
         self.assertTrue('HelperAllWords' in cmds)
+        self.assertTrue('HelperAllContexts' in cmds)
 
         # call Vim function search("canvas", 'w') to search
         # top-bottom-top
@@ -134,7 +135,7 @@ class TestGotoword(unittest.TestCase):
         # test HelperSave
         # -------------------------
         # note that cursor is positioned on 'rgb' word located previously;
-        # gotoword buffer is readonly, to prevent user from accidentally save
+        # gotoword buffer is readonly to prevent user from accidentally save
         # it with :w or to edit it with i
         self.client.command("set noreadonly")
         # focus/activate Helper buffer by moving to the top window:
@@ -182,6 +183,13 @@ class TestGotoword(unittest.TestCase):
         # check 'rbg' is deleted
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' not in all_words)
+
+        ## -------------------------
+        ## test HelperAllContexts
+        ## -------------------------
+        all_contexts = self.get_all_contexts(buffer_index)
+        self.assertTrue('python' in all_contexts)
+        time.sleep(0.5)
 
 #    def test_command_HelperSave(self):
 #        pass
