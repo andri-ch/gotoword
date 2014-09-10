@@ -112,6 +112,12 @@ if !exists(":HelperAllWords")
   command -nargs=0 HelperAllWords call s:Helper_all_words()
 endif
 
+if !exists(":HelperAllContexts")
+  " lists all available contexts that words can belong to (eg. python, c++,
+  " etc.)
+  command -nargs=0 HelperAllContexts call s:Helper_all_contexts()
+endif
+
 
 " --------------------------------
 " FUNCTIONS 
@@ -172,11 +178,9 @@ function! s:Helper_save(...)             " fct has a variable number of args
 
     python context = gotoword.vim.eval("context")
     python context = unicode(context.strip()).lower()
-    python app.context_new = context
     python test_answer = gotoword.vim.eval("test_answer")
     "python test_answer = unicode(test_answer).lower()
     python test_answer = test_answer.strip().lower()
-    python app.test_answer = test_answer
     python app.helper_save(context, test_answer)
     " OR
     " gotoword.helper_save(context, gotoword.store)
@@ -205,6 +209,15 @@ function! s:Helper_all_words()
     python app.helper_all_words()
 endfunction
 
+
+function! s:Helper_all_contexts()
+    " this function displays all contexts from DB in help_buffer, sorted in 
+    " alphabetical order
+    
+    " TODO: should take optional positional arguments indicating the context
+    " like Helper_all_words('python') to display all words in python context
+    python app.helper_all_contexts()
+endfunction
 
 
 " MAIN 

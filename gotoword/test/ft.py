@@ -78,7 +78,8 @@ class TestGotoword(unittest.TestCase):
         self.assertTrue('HelperDelete' in cmds)
         self.assertTrue('HelperAllWords' in cmds)
 
-        # call Vim function search("canvas", 'w') to search top-bottom
+        # call Vim function search("canvas", 'w') to search
+        # top-bottom-top
         # for a keyword we know is defined and has a definition in database
         line_nr = self.client.search('canvas', flags='w')
         # if there is no match 0 is returned
@@ -144,7 +145,8 @@ class TestGotoword(unittest.TestCase):
         self.client.normal('gg')
         self.client.normal('dG')
         # add a definition for keyword
-        self.client.insert("This is definition for keyword 'rgb'.")
+        self.client.insert("Functional tests: This is definition for "
+                           "keyword 'rgb'.")
         # exist Insert mode:
         self.client.normal('<ESC>')
         self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
@@ -188,7 +190,18 @@ class TestGotoword(unittest.TestCase):
 #        pass
 
     def get_all_keywords(self, buffer_index):
-        self.client.command('HelperAllWords')
+        "Displays the output of HelperAllWords vim command."
+        return self.get_cmd_output('HelperAllWords', buffer_index)
+
+    def get_all_contexts(self, buffer_index):
+        "Same as get_all_keywords"
+        return self.get_cmd_output('HelperAllContexts', buffer_index)
+
+    def get_cmd_output(self, cmd, buffer_index):
+        """Eg:
+            get_cmd_output('2', 'HelperAllWords')
+        """
+        self.client.command('%s' % cmd)
         return self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
 
 #    def tearDown(self):

@@ -417,8 +417,6 @@ class App(object):
         this function, if called twice on same keyword(first edit, then an update)
         should know that it doesn't need to create another keyword, just to update
         """
-        # initialize state machine to handle case 00
-
         self.state = EntryState()
         self.saving = True
         while self.saving:
@@ -426,12 +424,6 @@ class App(object):
             if self.state is None:
                 self.saving = False
 
-        #m = gotoword_state_machine.StateMachine()
-        #m.add_state("Start", start_transitions)
-        #m.add_state("read_context_state", read_context_transitions)
-        #m.add_state("end_state", end_state, end_state=1)
-        ##gotoword_state_machine.m.set_start("Start")
-        #m.run('start')
 
         ### debug ###
         ##if not context:
@@ -586,6 +578,36 @@ class App(object):
         logger.debug("names: %s" % names, extra={'className': strip(self.__class__)})
         self.vim_wrapper.help_buffer[:] = names
 
+    @database_operations
+    def helper_all_contexts(self):
+        """
+        List all contexts from database into help_buffer.
+        """
+        logger.debug("", extra={'className': strip(self.__class__)})
+        # select only the keyword names
+        result = STORE.execute("SELECT name FROM context;")
+        # dump from generator into a list
+        l = result.get_all()
+        '''
+        Example:
+        >>> l
+        [(u'python',), (u'django',), (u'java',)]
+        '''
+        # the above is a list of two tuples, we create a list of strings
+        names = [t[0] for t in l]
+        '''
+        >>> names
+        [u'line', u'color', u'canvas']
+        '''
+        names.sort()
+        '''
+        >>> names
+        [u'canvas', u'color', u'line']
+        '''
+        self.vim_wrapper.open_window(self.help_buffer_name)
+        logger.debug("names: %s" % names, extra={'className': strip(self.__class__)})
+        self.vim_wrapper.help_buffer[:] = names
+
 
 class VimWrapper(object):
     # TODO: maybe VimWrapper is not the best name, might create confusion
@@ -714,13 +736,9 @@ class EntryState(object):
         pass
 
     def evaluate(self, app, kw, context, test_answer):
-        app.new_kw = kw
-        app.new_context2 = context
         if not (kw and context):
-            app.readcontextstate = True
             return ReadContextState()
         else:
-            app.readcontextstate = False
             return None
 
 
