@@ -93,8 +93,9 @@ endif
 " :call Help_buffer(expand("<cword>"))   " call fct with word under the cursor 
 
 if !exists(":HelperSave")
-  command -nargs=? HelperSave call s:Helper_save(<f-args>)   
-  " ? means zero or one argument
+  command -nargs=* HelperSave call s:Helper_save(<f-args>)   
+  " -nargs=*    Any number of arguments are allowed (0, 1, or many)
+  " -nargs=?    zero or one argument
 endif
 
 " This command saves to DB the helper buffer, which should already exist
@@ -134,24 +135,49 @@ endfunction
 
 
 function! s:Helper_save(...)             " fct has a variable number of args
+    " SYNOPSIS
+    "   Helper_save()
+    "   Helper_save(context)
+    "   Helper_save(context, test_answer)
     " To redefine a function that already exists, use the ! 
+    " # TODO: do we need ! ?!? 
     " This way, we reload for each subsequent function call
     if !exists("g:loaded_Help_buffer")
       echo "There is nothing to save. HelperSave needs to be called after Helper command."
       return 
     endif
-    try
-      " get first positional argument
-      let context = a:1      
-      " python imports from vim functions run previously are still available, 
-      " as well as the variables defined.
-      python context = gotoword.vim.eval("context")
-      python context = unicode(context).lower()
-    "catch /^Vim\%((\a\+)\)\=:E121/
-    catch /.*/           " catch all errors that appear when no args exist
-      python context = ''
-    endtry
-    python app.helper_save(context)
+
+    if a:0 == 1
+        " get first positional argument
+        let context = a:1      
+        let test_answer = ''
+    elseif a:0 == 2
+        let context = a:1
+        let test_answer = a:2
+    else
+        let context = ''
+        let test_answer = ''
+    endif
+"    try
+"      " get first positional argument
+"      let context = a:1      
+"      " python imports from vim functions run previously are still available, 
+"      " as well as the variables defined.
+"      python context = gotoword.vim.eval("context")
+"      python context = unicode(context).lower()
+"    "catch /^Vim\%((\a\+)\)\=:E121/
+"    catch /.*/           " catch all errors that appear when no args exist
+"      python context = ''
+"    endtry
+
+    python context = gotoword.vim.eval("context")
+    python context = unicode(context.strip()).lower()
+    python app.context_new = context
+    python test_answer = gotoword.vim.eval("test_answer")
+    "python test_answer = unicode(test_answer).lower()
+    python test_answer = test_answer.strip().lower()
+    python app.test_answer = test_answer
+    python app.helper_save(context, test_answer)
     " OR
     " gotoword.helper_save(context, gotoword.store)
     " TODO: gotoword.helper_save(keyword, context, gotoword.store)

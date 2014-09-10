@@ -149,22 +149,26 @@ class TestGotoword(unittest.TestCase):
         self.client.normal('<ESC>')
         self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
         # call HelperSave with no context
-        #p = multiprocessing.Process(target=self.client.command, args=('HelperSave',))
-        #p.start()
-        self.client.command('HelperSave')
+        self.client.command('HelperSave "" 1')
         time.sleep(1)
         ## when prompt requires to answer, insert "1" -> insert context ->
-        #self.client.type("2")
-        #self.client.feedkeys("1")
+        #p = multiprocessing.Process(target=self.client.feedkeys, args=("\<Enter>",))
+        # TODO: I don't think Process is a solution:
+        p = multiprocessing.Process(target=self.client.type, args=("\<Enter>",))
+        p.start()
+        time.sleep(1)
+        p.terminate()
+        #self.client.type("2\<CR>")
+        #self.client.feedkeys("\<Enter>")
         #self.client.eval("feedkeys('%s')" % "1")
         #self.client.command('exe "normal 2 \<CR>"')
 
-        #self.client.feedkeys("\<Enter>")
+        #self.client.feedkeys('1 \<Enter>')
         #self.client.normal('1 \<Enter>')
         ## check definition and keyword are stored in database
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' in all_words)
-
+        time.sleep(1)
 
         ## -------------------------
         ## test HelperDelete
@@ -177,29 +181,6 @@ class TestGotoword(unittest.TestCase):
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' not in all_words)
 
-        ## -------------------------
-        ## check :HelperAllWords works after :Helper or other command
-        ## -------------------------
-        #self.client.command('HelperAllWords')
-        #time.sleep(1)
-
-        ## check all words from database are displayed, and look for a subset
-        #words = self.client.eval('getbufline(%s, 1, 3)' % buffer_index)
-        #self.assertEqual(['canvas', 'color', 'test'], words.split("\n"))
-
-#    def test_command_HelperAllWords(self):
-#        self.client('HelperAllWords')
-#
-#        window_nr = sp.check_output("""vim --servername {0} --remote-expr 'bufwinnr({1})'""".format(
-#            SERVER, buffer_nr), shell=True).strip()
-#        # if the buffer or no window exists for it, -1 is returned by bufwinnr()
-#        self.assertNotEqual(int(window_nr), -1)
-#
-#        # check if some buffer lines correspond
-#        info = sp.check_output("""vim --servername {0} --remote-expr 'getbufline({1}, 1, 3)'""".format(
-#            SERVER, buffer_nr), shell=True).strip()
-#        self.assertEqual(['canvas', 'color', 'test'], info.split())
-#
 #    def test_command_HelperSave(self):
 #        pass
 #

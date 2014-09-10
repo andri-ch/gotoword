@@ -412,7 +412,7 @@ class App(object):
         self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
 
     @database_operations
-    def helper_save(self, context):
+    def helper_save(self, context, test_answer):
         """
         this function, if called twice on same keyword(first edit, then an update)
         should know that it doesn't need to create another keyword, just to update
@@ -422,7 +422,7 @@ class App(object):
         self.state = EntryState()
         self.saving = True
         while self.saving:
-            self.state = self.state.evaluate(self, self.keyword, context)
+            self.state = self.state.evaluate(self, self.keyword, context, test_answer)
             if self.state is None:
                 self.saving = False
 
@@ -708,47 +708,68 @@ class VimWrapper(object):
 
 class EntryState(object):
     """Makes an initial evaluation of keyword & context and decides which is
-    the next state
+    the next state.
     """
     def __init__(self):
         pass
 
-    def evaluate(self, app, kw, context):
-        if not kw and not context:
+    def evaluate(self, app, kw, context, test_answer):
+        app.new_kw = kw
+        app.new_context2 = context
+        if not (kw and context):
+            app.readcontextstate = True
             return ReadContextState()
         else:
+            app.readcontextstate = False
             return None
 
 
 class ReadContextState(object):
-    def evaluate(self, app, kw, context):
-        vim.eval('inputsave()')
+    def evaluate(self, app, kw, context, test_answer):
+        #print("Do you want to specify a context that this definition of the word "
+        #      "applies in?")
+        #message = "[Y]es define it    [N]o do not define it    [A]bort"
+        ### following vim cmds are needed because:
+        ###   http://vim.wikia.com/wiki/User_input_from_a_script
+        #vim.command('call inputsave()')
+        ## put vim cursor here:
+        #vim.command("let user_input = input('" + message + ": ')")
+        #vim.command('call inputrestore()')
+        #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+        #answer = vim.eval('user_input')
+
+
         answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
                 "1. Yes, I will provide a context", \
                 "2. No, I won't provide a context", \
                 "3. Abort"])
                 """)
-        vim.eval('inputrestore()')
-        # debug
-        app.answer = answer
         # inputlist() is blocking the prompt, waiting for a key from user
-        time.sleep(2)
-        answer = answer.upper().strip()
-        print(answer)
-        vim.command('echo "%s"' % answer)
-        if answer.startswith('1'):
+        # inputlist() returns '0' if no
+        answer = answer.strip().lower()
+        # use test_answer if it is supplied (when testing)
+        answer = test_answer if test_answer else answer
+        # attach this local variable to our app
+        app.answer = answer
+        #if answer.startswith('1'):
+        #if answer.startswith(' 1'):
+        if answer == '1' or answer.startswith('y'):
             # read context ....
             return NewKeywordState()
-        elif answer.startswith('2'):
+        elif answer.startswith('2') or answer.startswith('n'):
             return NewKeywordState()
-        else:
+        elif answer.startswith('0') or answer.startswith('a'):
             # Abort
+            vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+            vim.command('echo "You entered: [\"%s\"]"' % answer)
+            vim.command('echo "You entered: [\"%s\"]"' % test_answer)
+            vim.command('echo ""')     # make prompt pass to next line, for pretty printing
             vim.command('echo "None is returned"')
             return None
 
 
 class NewKeywordState(object):
-    def evaluate(self, app, kw, context):
+    def evaluate(self, app, kw, context, test_answer):
         app.keyword = utils.create_keyword(STORE, app.word,
                                            app.vim_wrapper.help_buffer)
         vim.command('echo "keyword %s saved"' % app.keyword.name)
