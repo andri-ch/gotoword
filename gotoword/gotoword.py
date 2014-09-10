@@ -4,11 +4,6 @@ import os.path
 import sys
 import logging
 
-# needed by VimServer class
-import subprocess
-import time
-import multiprocessing
-
 ### Third party libs ###
 # for database:
 from storm.locals import Store
@@ -32,6 +27,8 @@ def set_up_logging(default_level):
         import vim
         filename = "gotoword_vim.log"
     except ImportError:
+        # TODO: do I need this branch? This script won't be executed outside
+        # editor
         # this branch is executed when this script is run outside vim editor
         filename = "gotoword_ipython.log"
         ### SET UP A CONSOLE HANDLER ###
@@ -69,13 +66,11 @@ SOURCE_DIR = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAG
 sys.path.insert(1, SOURCE_DIR)
 # Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
 import utils               # should be replaced by import utils
-import gotoword_state_machine
 
 # plugin's database that holds all the keywords and their info
 DB_NAME = 'keywords.db'
-DATABASE = utils.create_database('sqlite:' +
-                os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, DB_NAME)
-           )
+DATABASE = utils.create_database('sqlite:' + os.path.join(VIM_FOLDER,
+                                 PLUGINS_FOLDER, PLUGIN_NAME, DB_NAME))
 # Eg: DATABASE = 'sqlite:/home/user/.vim/user_plugins/gotoword/keywords.db'
 STORE = Store(DATABASE)
 # store is a cursor to database wrapped by storm
@@ -709,8 +704,14 @@ class VimWrapper(object):
         keyword = utils.find_keyword(STORE, self.parent.word)
 
         if keyword:
+            # get contexts this keyword belongs to (specific to ORM)
+            contexts_generator = keyword.contexts.values(utils.Context.name)
+            contexts = [c for c in contexts_generator]
+            # add a title line at the top
+            self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
+                                     (keyword.name, " ".join(contexts))]
             # load content in buffer, previous content is deleted
-            self.help_buffer[:] = keyword.info.splitlines()
+            self.help_buffer[1:] = keyword.info.splitlines()
         else:
             # keyword doesn't exist, prepare buffer to be filled with user content
 

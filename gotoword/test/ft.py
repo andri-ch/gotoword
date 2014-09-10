@@ -197,6 +197,7 @@ class TestGotoword(unittest.TestCase):
 #    def test_command_HelperDelete(self):
 #        pass
 
+    ### other utilitary functions
     def get_all_keywords(self, buffer_index):
         "Displays the output of HelperAllWords vim command."
         return self.get_cmd_output('HelperAllWords', buffer_index)

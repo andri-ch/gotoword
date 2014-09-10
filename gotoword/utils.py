@@ -114,6 +114,9 @@ class Context(Storm):
     def __init__(self, name):
         self.name = name
 
+    def __str__(self):
+        return self.name
+
     @classmethod
     def create_table(cls, store):
         '''Context.create_table or Context(u'a_context').create_table'''

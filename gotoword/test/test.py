@@ -21,11 +21,14 @@ import storm
 ### Own libraries ###
 #import gotoword
 from utils import Keyword, Context, create_keyword, update_keyword_info
+from utils import load_keywords_store
+import utils
+
 #from gotoword import *
 # TODO: get rid of this; you should do: import gotoword; that's it, like import
 # django
 
-# Beware, relative imports don't work when this file is called:
+# Beware, relative imports don't work when this file is called like:
 # $ python test.py
 
 keywords = {'canvas': "Define a canvas section in which you can add Graphics instructions that define how the widget is rendered.",
@@ -244,8 +247,8 @@ else:                                # when it is being imported
     print("Create table %s" % Context.__storm_table__)
     Context.create_table(store)
     # create table used for many-to-many relationships
-    print("Create table %s" % KeywordContext.__storm_table__)
-    KeywordContext.create_table(store)
+    print("Create table %s" % utils.KeywordContext.__storm_table__)
+    utils.KeywordContext.create_table(store)
     store.commit()
 
     kivy = Context(name=u'kivy')
@@ -260,5 +263,15 @@ else:                                # when it is being imported
     canvas.contexts.add(python)
     color.contexts.add(kivy)
     store.commit()
+
+    print("list all contexts keyword %s belongs to:" % canvas)
+    contexts_generator = canvas.contexts.values(Context.name)
+    for context in contexts_generator:
+        print(context)
+
+    print("list all keywords in context %s: " % kivy)
+    words_generator = kivy.keywords.values(Keyword.name)
+    for word in words_generator:
+        print(word)
 
     # user at shell is required to call store.close() at the end.
