@@ -102,6 +102,7 @@ class Context(Storm):
     __storm_table__ = "context"
     id = Int(primary=True)
     name = Unicode()
+    # TODO: implement a short description?  maybe with django-standalone ORM
     #description = Unicode()
 
     # implement many-to-many reference: context has multiple keywords

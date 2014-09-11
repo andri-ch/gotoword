@@ -18,6 +18,10 @@ import multiprocessing
 
 from vimrunner import Server
 
+# gotoword modules
+from gotoword import STORE
+import utils
+
 # start vim server with GUI, it is better this way because it doesn't mess up
 # the test terminal
 # OR
@@ -78,6 +82,7 @@ class TestGotoword(unittest.TestCase):
         self.assertTrue('HelperDelete' in cmds)
         self.assertTrue('HelperAllWords' in cmds)
         self.assertTrue('HelperAllContexts' in cmds)
+        self.assertTrue('HelperContextWords' in cmds)
 
         # call Vim function search("canvas", 'w') to search
         # top-bottom-top
@@ -151,17 +156,19 @@ class TestGotoword(unittest.TestCase):
         # exist Insert mode:
         self.client.normal('<ESC>')
         self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
-        # call HelperSave with no context
+        ##
+        ## call HelperSave with no context
+        ##
         self.client.command('HelperSave "" 1')
         time.sleep(1)
         ## when prompt requires to answer, insert "1" -> insert context ->
         #p = multiprocessing.Process(target=self.client.feedkeys, args=("\<Enter>",))
         # TODO: I don't think Process is a solution:
-        p = multiprocessing.Process(target=self.client.type, args=("\<Enter>",))
-        p.start()
-        time.sleep(1)
-        p.terminate()
-        #self.client.type("2\<CR>")
+        #p = multiprocessing.Process(target=self.client.type, args=("\<Enter>",))
+        #p.start()
+        #time.sleep(1)
+        #p.terminate()
+        self.client.type("\<CR>")
         #self.client.feedkeys("\<Enter>")
         #self.client.eval("feedkeys('%s')" % "1")
         #self.client.command('exe "normal 2 \<CR>"')
@@ -184,12 +191,39 @@ class TestGotoword(unittest.TestCase):
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' not in all_words)
 
+        ##
+        ## call HelperSave with context
+        ##
+        #self.client.command('HelperSave kivy 1')
+        #time.sleep(1)
+
         ## -------------------------
         ## test HelperAllContexts
         ## -------------------------
         all_contexts = self.get_all_contexts(buffer_index)
+        # test at least one context exists
+        # TODO: contexts should be retrieved from DB and test for equality
+        # between the two
         self.assertTrue('python' in all_contexts)
         time.sleep(0.5)
+
+        ## -------------------------
+        ## test 'HelperContextWords'
+        ## -------------------------
+        context = "python"
+        # get keywords that belong to context with :HelperContextWords cmd
+        ctx_words = self.get_cmd_output('HelperContextWords %s' % context,
+                                        buffer_index)
+        # Eg. inside Vim editor:
+        # :HelperContextWords python
+        # get context from DB as a Storm object and count keywords from table
+        ctx = utils.Context.find_context(STORE, unicode(context))
+        # compare the two numbers
+        self.assertEqual(ctx.keywords.count(), len(ctx_words.split("\n")) - 1)
+        # len(lines) - 1 because we omit the title line
+
+
+
 
 #    def test_command_HelperSave(self):
 #        pass

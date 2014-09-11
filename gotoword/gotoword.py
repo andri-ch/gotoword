@@ -368,8 +368,9 @@ try:
     # More info here:
     # http://vimdoc.sourceforge.net/htmldoc/if_pyth.html#Python
 except ImportError:
-    print("script must be run inside vim editor")
-    sys.exit()
+    print("Script must be run inside vim editor!")
+    print("Either quit or use some variables and functions")
+    #sys.exit()
 
     # TODO:
     # toggle_activate, toggle_readonly should be part of vim client server
@@ -603,6 +604,26 @@ class App(object):
         logger.debug("names: %s" % names, extra={'className': strip(self.__class__)})
         self.vim_wrapper.help_buffer[:] = names
 
+    @database_operations
+    def helper_context_words(self, context):
+        """
+        Displays all keywords that have a definition belonging to this
+        context.
+        context - a string
+        Returns a list of words.
+        """
+        # locate context into database and retrieve it as a Storm ORM object
+        storm_context = utils.Context.find_context(STORE, context)
+        words_generator = storm_context.keywords.values(utils.Keyword.name)
+        words = [w for w in words_generator]
+        words.sort()
+        # add a title on the first line
+        self.vim_wrapper.help_buffer[0:0] = [
+            "The following keywords have a meaning (definition) in '%s' "
+            "context:" % storm_context.name]
+        self.vim_wrapper.help_buffer[1:] = words
+        return words
+
 
 class VimWrapper(object):
     # TODO: maybe VimWrapper is not the best name, might create confusion
@@ -704,7 +725,8 @@ class VimWrapper(object):
         keyword = utils.find_keyword(STORE, self.parent.word)
 
         if keyword:
-            # get contexts this keyword belongs to (specific to ORM)
+            # get contexts this keyword belongs to (specific to ORM) should be
+            # moved to utils
             contexts_generator = keyword.contexts.values(utils.Context.name)
             contexts = [c for c in contexts_generator]
             # add a title line at the top
@@ -737,14 +759,35 @@ class EntryState(object):
         pass
 
     def evaluate(self, app, kw, context, test_answer):
+        # kw is None if no keyword exists in database
         if not (kw and context):
+            # case when kw doesn't exist in DB and context was not given by
+            # user
             return ReadContextState()
+        elif context and not kw:
+            # case when kw doesn't exist in DB and context was given by user
+            # context was supplied by user to save keyword in that context;
+            # check if it exists in the database (if it is not a new one)
+            ctx = utils.Context.find_context(STORE, context)
+            # if context not in DB, ctx will be None, create a new context
+            if not ctx:
+                # TODO: prompt user that context doesn't exist and must be
+                # created; if yes:
+                # save it to DB
+                context = utils.Context(name=context)
+                STORE.add(context)
+                STORE.commit()
+            # continue with creating and saving a keyword
+            return NewKeywordState()
         else:
             return None
 
 
 class ReadContextState(object):
+    """Prompts user to supply context."""
     def evaluate(self, app, kw, context, test_answer):
+        # we keep this code in case we want to drop inputlist() for reading
+        # user input
         #print("Do you want to specify a context that this definition of the word "
         #      "applies in?")
         #message = "[Y]es define it    [N]o do not define it    [A]bort"
@@ -764,7 +807,7 @@ class ReadContextState(object):
                 "3. Abort"])
                 """)
         # inputlist() is blocking the prompt, waiting for a key from user
-        # inputlist() returns '0' if no
+        # inputlist() returns '0' if no option is chosen
         answer = answer.strip().lower()
         # use test_answer if it is supplied (when testing)
         answer = test_answer if test_answer else answer
@@ -788,12 +831,22 @@ class ReadContextState(object):
 
 
 class NewKeywordState(object):
+    "Creates a keyword and stores it to database."
     def evaluate(self, app, kw, context, test_answer):
         app.keyword = utils.create_keyword(STORE, app.word,
                                            app.vim_wrapper.help_buffer)
-        vim.command('echo "keyword %s saved"' % app.keyword.name)
+        # add keyword definition to context
+        app.keyword.contexts.add(context)
+        STORE.commmit()
+        vim.command('echo "keyword %s saved into context %s"' %
+                    (app.keyword.name, context))
         return None
 
+
+class NewContextState(object):
+    "Creates a context and stores it to database."
+    def evaluate(self, app, kw, context, test_answer):
+        pass
 
 #### MAIN ###
 

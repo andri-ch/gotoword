@@ -118,6 +118,19 @@ if !exists(":HelperAllContexts")
   command -nargs=0 HelperAllContexts call s:Helper_all_contexts()
 endif
 
+if !exists(":HelperContextWords")
+  " lists all available words that belong to context (eg. python context could
+  " have django, flask, pyramid, as keywords, etc.)
+  command -nargs=1 HelperContextWords call s:Helper_context_words(<f-args>))
+  " SYNOPSIS
+  "   :HelperContextWords python
+  "   Do not add simple or double quotes around argument because function handles them 
+  "   differently;
+  "   Bad examples:
+  "   :HelperContextWords "python"
+  "   :HelperContextWords 'python'
+endif
+
 
 " --------------------------------
 " FUNCTIONS 
@@ -149,6 +162,7 @@ function! s:Helper_save(...)             " fct has a variable number of args
     " # TODO: do we need ! ?!? 
     " This way, we reload for each subsequent function call
     if !exists("g:loaded_Help_buffer")
+      " TODO: is this working?
       echo "There is nothing to save. HelperSave needs to be called after Helper command."
       return 
     endif
@@ -218,6 +232,17 @@ function! s:Helper_all_contexts()
     " like Helper_all_words('python') to display all words in python context
     python app.helper_all_contexts()
 endfunction
+
+
+function! s:Helper_context_words(context)
+    " this function displays in help_buffer all keywords from DB that belong 
+    " to context, sorted in alphabetical order
+    python context = gotoword.vim.eval("a:context")
+    " sanitize arg; TODO: define a sanitize() fct
+    python context = unicode(context.strip()).lower()
+    python app.helper_context_words(context)
+endfunction
+
 
 
 " MAIN 

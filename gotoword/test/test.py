@@ -264,12 +264,12 @@ else:                                # when it is being imported
     color.contexts.add(kivy)
     store.commit()
 
-    print("list all contexts keyword %s belongs to:" % canvas)
+    print("list all contexts the keyword %s belongs to:" % canvas)
     contexts_generator = canvas.contexts.values(Context.name)
     for context in contexts_generator:
         print(context)
 
-    print("list all keywords in context %s: " % kivy)
+    print("list all keywords the context %s has: " % kivy)
     words_generator = kivy.keywords.values(Keyword.name)
     for word in words_generator:
         print(word)
