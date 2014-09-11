@@ -14,12 +14,12 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import os
 import unittest
 import time
-import multiprocessing
+#import multiprocessing
 
 from vimrunner import Server
 
 # gotoword modules
-from gotoword import STORE
+import gotoword
 import utils
 
 # start vim server with GUI, it is better this way because it doesn't mess up
@@ -54,6 +54,11 @@ class TestGotoword(unittest.TestCase):
         # prevent vim from opening windows for the same buffer
         self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
     # create a test DB and populate it with keywords and definitions
+
+    def tearDown(self):
+        # close vim server
+        #self.vim.quit()
+        pass
 
     def test_command_Helper(self):
         """
@@ -122,45 +127,17 @@ class TestGotoword(unittest.TestCase):
         # if the buffer or no window exists for it, -1 is returned by bufwinnr()
         self.assertNotEqual(int(window_nr), -1)
 
-        # -------------------------
+        ## -------------------------
         # show that 'rgb' doesn't exist in database
-        # -------------------------
-        # locate it in current document
-        line_nr = self.client.search('rgb', flags='w')
-        self.assertNotEqual('0', line_nr)
+        ## -------------------------
+        self.keyword_fixture('rgb', buffer_index, buffer_name)
 
-        # display help text in Help buffer about "rgb"
-        self.client.command('Helper')
-
-        # check if definition informs user that word doesn't exist in database
-        info = self.client.eval('getbufline(%s, 1)' % buffer_index)
-        self.assertTrue('"rgb" doesn\'t exist' in info)
-
-        # -------------------------
-        # test HelperSave
-        # -------------------------
-        # note that cursor is positioned on 'rgb' word located previously;
-        # gotoword buffer is readonly to prevent user from accidentally save
-        # it with :w or to edit it with i
-        self.client.command("set noreadonly")
-        # focus/activate Helper buffer by moving to the top window:
-        self.client.feedkeys('\<C-w>k')
-        self.client.command('buffer! %s' % buffer_index)
-        time.sleep(2)
-        # delete default text:
-        self.client.normal('gg')
-        self.client.normal('dG')
-        # add a definition for keyword
-        self.client.insert("Functional tests: This is definition for "
-                           "keyword 'rgb'.")
-        # exist Insert mode:
-        self.client.normal('<ESC>')
-        self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
-        ##
-        ## call HelperSave with no context
-        ##
+        ## -------------------------
+        #  call HelperSave with no context
+        ## -------------------------
         self.client.command('HelperSave "" 1')
         time.sleep(1)
+        ##
         ## when prompt requires to answer, insert "1" -> insert context ->
         #p = multiprocessing.Process(target=self.client.feedkeys, args=("\<Enter>",))
         # TODO: I don't think Process is a solution:
@@ -168,34 +145,41 @@ class TestGotoword(unittest.TestCase):
         #p.start()
         #time.sleep(1)
         #p.terminate()
+        ##
         self.client.type("\<CR>")
         #self.client.feedkeys("\<Enter>")
-        #self.client.eval("feedkeys('%s')" % "1")
-        #self.client.command('exe "normal 2 \<CR>"')
-
         #self.client.feedkeys('1 \<Enter>')
-        #self.client.normal('1 \<Enter>')
+
         ## check definition and keyword are stored in database
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' in all_words)
         time.sleep(1)
 
         ## -------------------------
-        ## test HelperDelete
+        #  test HelperDelete
         ## -------------------------
         ## delete 'rgb' word saved previuosly
         # HelperDelete deletes the keyword on which Helper was called
         # which in this case is 'rgb'
         self.client.command('HelperDelete')
-        # check 'rbg' is deleted
+        # check 'rgb' is deleted
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' not in all_words)
 
-        ##
-        ## call HelperSave with context
-        ##
-        #self.client.command('HelperSave kivy 1')
-        #time.sleep(1)
+        ## -------------------------
+        #  call HelperSave with context that exists in database
+        ## -------------------------
+        # call :Helper on word 'rgb'
+        self.keyword_fixture('rgb', buffer_index, buffer_name)
+
+        ## we save again the word 'rgb', but we supply a context
+        self.client.command('HelperSave kivy 1')
+        time.sleep(0.5)
+        # we don't have a prompt for now
+        #self.client.type("\<CR>")
+        context = "kivy"
+        ctx_words = self.get_context_keywords(buffer_index, context)
+        self.assertTrue('rgb' in ctx_words)
 
         ## -------------------------
         ## test HelperAllContexts
@@ -210,20 +194,16 @@ class TestGotoword(unittest.TestCase):
         ## -------------------------
         ## test 'HelperContextWords'
         ## -------------------------
+        # get keywords that are defined in the 'python' context using the
+        # plugin we are testing
         context = "python"
-        # get keywords that belong to context with :HelperContextWords cmd
-        ctx_words = self.get_cmd_output('HelperContextWords %s' % context,
-                                        buffer_index)
-        # Eg. inside Vim editor:
-        # :HelperContextWords python
-        # get context from DB as a Storm object and count keywords from table
-        ctx = utils.Context.find_context(STORE, unicode(context))
+        ctx_words = self.get_context_keywords(buffer_index, context)
+        # get context from DB as a Storm object and count keywords straight
+        # from DB table
+        ctx = utils.Context.find_context(gotoword.STORE, unicode(context))
         # compare the two numbers
         self.assertEqual(ctx.keywords.count(), len(ctx_words.split("\n")) - 1)
         # len(lines) - 1 because we omit the title line
-
-
-
 
 #    def test_command_HelperSave(self):
 #        pass
@@ -240,6 +220,15 @@ class TestGotoword(unittest.TestCase):
         "Same as get_all_keywords"
         return self.get_cmd_output('HelperAllContexts', buffer_index)
 
+    def get_context_keywords(self, buffer_index, context):
+        """Gets keywords that belong to context with :HelperContextWords cmd.
+        Eg. inside Vim editor:
+        :HelperContextWords python
+        Returns the keywords as a string.
+        """
+        return self.get_cmd_output('HelperContextWords %s' % context,
+                                   buffer_index)
+
     def get_cmd_output(self, cmd, buffer_index):
         """Eg:
             get_cmd_output('2', 'HelperAllWords')
@@ -247,11 +236,62 @@ class TestGotoword(unittest.TestCase):
         self.client.command('%s' % cmd)
         return self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
 
-#    def tearDown(self):
-#        # close vim server
-#        self.vim.quit()
+    def keyword_fixture(self, kword, buffer_index, buffer_name):
+        """
+        Simulates the user activity inside Vim editor regarding a word that
+        doesn't exist yet in the plugin database:
+            - how he locates a word he wants more info about
+            - how he calls :Helper  cmd on that word
+            - the Helper buffer opens but it contains the default lines for
+              words that don't exist yet in the database
+            - he deletes the default text and writes his own notes about the
+              word
+        This function is useful to call :Helper on random words in the test
+        document.
+        Arguments:
+            buffer_index    the index of Helper_buffer inside Vim editor
+            buffer_name     the Helper_buffer inside Vim editor
+        Returns nothing.
+        Eg:
+            keyword_fixture('canvas', '2', '~/documents/my_file.txt')
+        """
 
+        # locate it in current document
+        line_nr = self.client.search(kword, flags='w')
+        self.assertNotEqual('0', line_nr)
 
+        # display help text in Help buffer about "rgb"
+        self.client.command('Helper')
+
+        # check if definition informs user that word doesn't exist in database
+        info = self.client.eval('getbufline(%s, 1)' % buffer_index)
+        self.assertTrue('"%s" doesn\'t exist' % kword in info)
+
+        # note that cursor is positioned on kword word located previously in
+        # test document;
+        # gotoword buffer is readonly to prevent user from accidentally save
+        # it with :w or to edit it with i, but we want to add text to it:
+        self.client.command("set noreadonly")
+
+        ### focus Helper_buffer window
+        # all functions and classes from gotoword expect to have 'vim' python
+        # module binding to Vim editor as a global variable, but we substitute
+        # it with a partially compatible Vim server client
+        gotoword.vim = self.client
+        # focus window:
+        gotoword.VimWrapper.open_window(buffer_name)
+        ###
+
+        # pause a bit to allow visual inspection, if needed
+        time.sleep(1)
+        # delete default text:
+        self.client.normal('gg')
+        self.client.normal('dG')
+        # add a definition for keyword
+        self.client.insert("Functional tests: This is definition for "
+                           "keyword '%s'." % kword)
+        # exist Insert mode:
+        self.client.normal('<ESC>')
 
 
 if __name__ == '__main__':

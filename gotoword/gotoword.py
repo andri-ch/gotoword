@@ -413,31 +413,15 @@ class App(object):
         this function, if called twice on same keyword(first edit, then an update)
         should know that it doesn't need to create another keyword, just to update
         """
+        # bind to app for easier handling
+        self.context = context
+        # state strategy pattern:
         self.state = EntryState()
         self.saving = True
         while self.saving:
-            self.state = self.state.evaluate(self, self.keyword, context, test_answer)
+            self.state = self.state.evaluate(self, self.keyword, self.context, test_answer)
             if self.state is None:
                 self.saving = False
-
-
-        ### debug ###
-        ##if not context:
-        ##    print("context is empty")
-        ##    cargo = (utils.create_keyword, STORE, self.keyword,
-        ##             self.vim_wrapper.help_buffer)
-        ##    gotoword_state_machine.m.run(cargo)
-        ##else:
-        ##    print("context is %s" % context)
-
-        #if context:
-        #    # context was specified by the user, so look it up in DB
-        #    ctx = Context.find_context(context)
-        #    # if context not in DB, ctx will be None, create a new context
-        #    if !ctx:
-        #        context = Context(name=context)
-        #else:
-        #    pass
 
 
         ### ALL COMBINATIONS ###
@@ -677,7 +661,8 @@ class VimWrapper(object):
         # activate the user (initial) buffer
         vim.command("buffer! %s" % user_buf_nr)
 
-    def open_window(self, buffer_name):
+    @staticmethod
+    def open_window(buffer_name):
         """
         Opens a window inside vim editor with an existing buffer whose name is
         the value of buffer name.
@@ -758,6 +743,7 @@ class EntryState(object):
     def __init__(self):
         pass
 
+    @database_operations
     def evaluate(self, app, kw, context, test_answer):
         # kw is None if no keyword exists in database
         if not (kw and context):
@@ -777,6 +763,9 @@ class EntryState(object):
                 context = utils.Context(name=context)
                 STORE.add(context)
                 STORE.commit()
+            # transform app.context which is just a string into a Storm object
+            # from DB
+            app.context = ctx
             # continue with creating and saving a keyword
             return NewKeywordState()
         else:
@@ -799,7 +788,6 @@ class ReadContextState(object):
         #vim.command('call inputrestore()')
         #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
         #answer = vim.eval('user_input')
-
 
         answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
                 "1. Yes, I will provide a context", \
@@ -832,6 +820,7 @@ class ReadContextState(object):
 
 class NewKeywordState(object):
     "Creates a keyword and stores it to database."
+    @database_operations
     def evaluate(self, app, kw, context, test_answer):
         app.keyword = utils.create_keyword(STORE, app.word,
                                            app.vim_wrapper.help_buffer)

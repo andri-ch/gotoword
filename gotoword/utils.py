@@ -233,6 +233,7 @@ def update_keyword_info(store, keyword, buf):
     '''Commits to database the contents from helper buffer. Maybe it
     should detect if changes from original exist.
     buf  -> a vim buffer'''
+    # read from Vim buffer
     lines = buf[:]
     buf_content = "\n".join(lines)
     # storm stores content to db as unicode
