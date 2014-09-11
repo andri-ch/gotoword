@@ -434,7 +434,6 @@ class App(object):
                 # yes -> create keyword with context   1
                 # no -> create keyword with no context 0
 
-
         # keyword doesn't exist, context exists                                                    0 1
             # context exists in db, do you want to create keyword with context?    1
                 # yes -> create keyword with context [default yes]       1
@@ -442,7 +441,6 @@ class App(object):
             # context doesn't exist in db, do you want to assign keyword def. to a context?  0
                                     # yes, create keyword & context [yes]     1
                                     # no, user might have made a context spelling mistake  0
-
 
         # keyword exists, context doesn't                                                          1 0
             # with no context defined. Would the user want to create another context?
@@ -467,7 +465,6 @@ class App(object):
                              # keep the old def, but new context, definition pair? (a dict)
                 # no, then update the existing definition, keep with same context.
 
-
         # keyword exists, context exists                                                           1 1
             # if more contexts, load one of them
             # context exists in db:
@@ -489,7 +486,6 @@ class App(object):
                 # keyword has a context. Do you want to update just the keyword context?
                     # yes, update keyword and context
                     # no, keep old definition and create a new def with context
-
 
                     #if keyword:
                     #    # if keyword already defined in database, update it
@@ -524,9 +520,22 @@ class App(object):
             # keyword.name which is still in the namespace, right?
             STORE.remove(keyword)
             STORE.commit()
-            print("Keyword %s and its definition removed from database" % kw_name)
+            print("Keyword %s and its definition was removed from database" %
+                  kw_name)
         else:
             print("Can't delete a word and its definition if it's not in the database.")
+
+    @database_operations
+    def helper_delete_context(self, context):
+        "Deletes context from database."
+        context = utils.Context.find_context(STORE, context)
+        if context:
+            ctx_name = context.name
+            STORE.remove(context)
+            STORE.commit()
+            print("Context %s was removed from database" % ctx_name)
+        else:
+            print("Can't delete a context if it's not in the database.")
 
     @database_operations
     def helper_all_words(self):
@@ -746,11 +755,12 @@ class EntryState(object):
     @database_operations
     def evaluate(self, app, kw, context, test_answer):
         # kw is None if no keyword exists in database
-        if not (kw and context):
+        if (not kw) and (not context):
             # case when kw doesn't exist in DB and context was not given by
             # user
             return ReadContextState()
-        elif context and not kw:
+        elif context:
+            app.new_context = True
             # case when kw doesn't exist in DB and context was given by user
             # context was supplied by user to save keyword in that context;
             # check if it exists in the database (if it is not a new one)
@@ -760,8 +770,9 @@ class EntryState(object):
                 # TODO: prompt user that context doesn't exist and must be
                 # created; if yes:
                 # save it to DB
-                context = utils.Context(name=context)
-                STORE.add(context)
+                app.new_context2 = True
+                ctx = utils.Context(name=context)
+                STORE.add(ctx)
                 STORE.commit()
             # transform app.context which is just a string into a Storm object
             # from DB
@@ -826,7 +837,7 @@ class NewKeywordState(object):
                                            app.vim_wrapper.help_buffer)
         # add keyword definition to context
         app.keyword.contexts.add(context)
-        STORE.commmit()
+        STORE.commit()
         vim.command('echo "keyword %s saved into context %s"' %
                     (app.keyword.name, context))
         return None

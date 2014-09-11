@@ -85,6 +85,7 @@ class TestGotoword(unittest.TestCase):
         self.assertTrue('Helper' in cmds)
         self.assertTrue('HelperSave' in cmds)
         self.assertTrue('HelperDelete' in cmds)
+        self.assertTrue('HelperDeleteContext' in cmds)
         self.assertTrue('HelperAllWords' in cmds)
         self.assertTrue('HelperAllContexts' in cmds)
         self.assertTrue('HelperContextWords' in cmds)
@@ -180,6 +181,9 @@ class TestGotoword(unittest.TestCase):
         context = "kivy"
         ctx_words = self.get_context_keywords(buffer_index, context)
         self.assertTrue('rgb' in ctx_words)
+
+        # delete 'rgb'
+        self.client.command('HelperDelete')
 
         ## -------------------------
         ## test HelperAllContexts

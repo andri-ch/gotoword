@@ -106,6 +106,11 @@ if !exists(":HelperDelete")
   command -nargs=0 HelperDelete call s:Helper_delete()
 endif
 
+if !exists(":HelperDeleteContext")
+  command -nargs=1 HelperDeleteContext call s:Helper_delete_context(<f-args>)
+endif
+
+
 " TODO: create a HelperDeleteContext and/or HelperDefineContext or
 " HelperContext delete/new/list         new or save or add; which one?
 if !exists(":HelperAllWords")
@@ -121,7 +126,7 @@ endif
 if !exists(":HelperContextWords")
   " lists all available words that belong to context (eg. python context could
   " have django, flask, pyramid, as keywords, etc.)
-  command -nargs=1 HelperContextWords call s:Helper_context_words(<f-args>))
+  command -nargs=1 HelperContextWords call s:Helper_context_words(<f-args>)
   " SYNOPSIS
   "   :HelperContextWords python
   "   Do not add simple or double quotes around argument because function handles them 
@@ -211,6 +216,14 @@ function! s:Helper_delete()
     " so it should test in vim code for function flags...
     python app.helper_delete(app.keyword)
     "python gotoword.helper_delete(keyword, gotoword.store)
+endfunction
+
+
+function! s:Helper_delete_context(context)
+    " deletes a context from database
+    python context = gotoword.vim.eval("a:context")
+    python context = unicode(context.strip()).lower()
+    python app.helper_delete_context(context)
 endfunction
 
 
