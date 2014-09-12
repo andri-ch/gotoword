@@ -14,7 +14,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import os
 import unittest
 import time
-#import multiprocessing
+import multiprocessing
 
 from vimrunner import Server
 
@@ -136,18 +136,23 @@ class TestGotoword(unittest.TestCase):
         ## -------------------------
         #  call HelperSave with no context
         ## -------------------------
-        self.client.command('HelperSave "" 1')
+        self.client.command('HelperSave')
+        #self.client.command('HelperSave "" 1')
         time.sleep(1)
         ##
         ## when prompt requires to answer, insert "1" -> insert context ->
         #p = multiprocessing.Process(target=self.client.feedkeys, args=("\<Enter>",))
         # TODO: I don't think Process is a solution:
-        #p = multiprocessing.Process(target=self.client.type, args=("\<Enter>",))
-        #p.start()
+        #p = multiprocessing.Process(target=self.client.type, args=("1\<CR>",))
+        p = multiprocessing.Process(target=self.client.type, args=("y",))
+        p.start()
         #time.sleep(1)
         #p.terminate()
         ##
-        self.client.type("\<CR>")
+        #self.client.type("\<CR>")
+
+        #self.client.type("1")
+        self.client.type("y")
         #self.client.feedkeys("\<Enter>")
         #self.client.feedkeys('1 \<Enter>')
 

@@ -756,10 +756,19 @@ class EntryState(object):
     def evaluate(self, app, kw, context, test_answer):
         # kw is None if no keyword exists in database
         if (not kw) and (not context):
+            # check out
+            # http://www.diveintopython.net/power_of_introspection/and_or.html
+            # for The peculiar nature of 'and' and 'or'
             # case when kw doesn't exist in DB and context was not given by
             # user
+            app.kw = kw
+            app.new_context0 = context
+            app.bol = (not kw) and (not context)
             return ReadContextState()
-        elif context:
+        elif (not kw) and context:
+            app.kw2 = kw
+            app.new_context1 = context
+            app.bol2 = context and (not kw)
             app.new_context = True
             # case when kw doesn't exist in DB and context was given by user
             # context was supplied by user to save keyword in that context;
@@ -788,6 +797,9 @@ class ReadContextState(object):
     def evaluate(self, app, kw, context, test_answer):
         # we keep this code in case we want to drop inputlist() for reading
         # user input
+        # input(), inputlist(), getchar() are all Vim blocking methods, cannot
+        # be tested well...
+
         #print("Do you want to specify a context that this definition of the word "
         #      "applies in?")
         #message = "[Y]es define it    [N]o do not define it    [A]bort"
@@ -800,13 +812,30 @@ class ReadContextState(object):
         #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
         #answer = vim.eval('user_input')
 
-        answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
-                "1. Yes, I will provide a context", \
-                "2. No, I won't provide a context", \
-                "3. Abort"])
-                """)
+        #answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
+        #        "1. Yes, I will provide a context", \
+        #        "2. No, I won't provide a context", \
+        #        "3. Abort"])
+        #        """)
         # inputlist() is blocking the prompt, waiting for a key from user
         # inputlist() returns '0' if no option is chosen
+
+        print("Do you want to specify a context that this definition of the word "
+              "applies in?")
+        vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+        message = "[Y]es define it    [N]o do not define it    [A]bort"
+        print(message)
+        vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+        #answer = vim.eval('getchar(0)')
+        # the following snippet is taken from here:
+        # http://stackoverflow.com/questions/4189239/vim-script-input-function-that-doesnt-require-user-to-hit-enter
+        # snippet is needed because 8 bit characters are converted to numbers
+        # by getchar()
+        vim.command('exe "let c = getchar(1)"')
+        vim.command("exe \"if c =~ '^\d\+$'\"")
+        vim.command('exe "let c = nr2char(c)"')
+        vim.command('exe "endif"')
+        answer = vim.eval('c')
         answer = answer.strip().lower()
         # use test_answer if it is supplied (when testing)
         answer = test_answer if test_answer else answer
@@ -826,6 +855,9 @@ class ReadContextState(object):
             vim.command('echo "You entered: [\"%s\"]"' % test_answer)
             vim.command('echo ""')     # make prompt pass to next line, for pretty printing
             vim.command('echo "None is returned"')
+            return None
+        else:
+            vim.command('echo "Invalid option! Type a number from 1 to 3"')
             return None
 
 
