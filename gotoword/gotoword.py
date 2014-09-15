@@ -820,22 +820,25 @@ class ReadContextState(object):
         # inputlist() is blocking the prompt, waiting for a key from user
         # inputlist() returns '0' if no option is chosen
 
-        print("Do you want to specify a context that this definition of the word "
-              "applies in?")
-        vim.command('echo ""')     # make prompt pass to next line, for pretty printing
-        message = "[Y]es define it    [N]o do not define it    [A]bort"
-        print(message)
-        vim.command('echo ""')     # make prompt pass to next line, for pretty printing
-        #answer = vim.eval('getchar(0)')
-        # the following snippet is taken from here:
-        # http://stackoverflow.com/questions/4189239/vim-script-input-function-that-doesnt-require-user-to-hit-enter
-        # snippet is needed because 8 bit characters are converted to numbers
-        # by getchar()
-        vim.command('exe "let c = getchar(1)"')
-        vim.command("exe \"if c =~ '^\d\+$'\"")
-        vim.command('exe "let c = nr2char(c)"')
-        vim.command('exe "endif"')
-        answer = vim.eval('c')
+        #print("Do you want to specify a context that this definition of the word "
+        #      "applies in?")
+        #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+        #message = "[Y]es define it    [N]o do not define it    [A]bort"
+        #print(message)
+        #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+        ##answer = vim.eval('getchar(0)')
+        ## the following snippet is taken from here:
+        ## http://stackoverflow.com/questions/4189239/vim-script-input-function-that-doesnt-require-user-to-hit-enter
+        ## snippet is needed because 8 bit characters are converted to numbers
+        ## by getchar()
+        #vim.command('exe "let c = getchar()"')
+        #vim.command("exe \"if c =~ '^\d\+$' | let c = nr2char(c) | endif\"")
+        ## allow multiple commands on same line with |
+        ##vim.command('exe "let c = nr2char(c) | endif"')
+        ##vim.command('exe "endif"')
+        #answer = vim.eval('c')
+
+        answer = vim.eval('confirm("Do you want to define a context that this definition of the word applies in?", "&Yes\n&No\n&Cancel")')
         answer = answer.strip().lower()
         # use test_answer if it is supplied (when testing)
         answer = test_answer if test_answer else answer
@@ -845,19 +848,22 @@ class ReadContextState(object):
         #if answer.startswith(' 1'):
         if answer == '1' or answer.startswith('y'):
             # read context ....
+            # TODO: NewContextState()
             return NewKeywordState()
         elif answer.startswith('2') or answer.startswith('n'):
+            app.nocontextno = True
             return NewKeywordState()
-        elif answer.startswith('0') or answer.startswith('a'):
+        #elif answer.startswith('0') or answer.startswith('a'):
+        elif answer.startswith('3') or answer.startswith('a'):
             # Abort
             vim.command('echo ""')     # make prompt pass to next line, for pretty printing
-            vim.command('echo "You entered: [\"%s\"]"' % answer)
+            vim.command('echomsg "You entered: [\"%s\"]"' % answer)
             vim.command('echo "You entered: [\"%s\"]"' % test_answer)
             vim.command('echo ""')     # make prompt pass to next line, for pretty printing
             vim.command('echo "None is returned"')
             return None
         else:
-            vim.command('echo "Invalid option! Type a number from 1 to 3"')
+            vim.command('echomsg "Invalid option! Type a number from 1 to 3"')
             return None
 
 
@@ -870,7 +876,7 @@ class NewKeywordState(object):
         # add keyword definition to context
         app.keyword.contexts.add(context)
         STORE.commit()
-        vim.command('echo "keyword %s saved into context %s"' %
+        vim.command('echomsg "keyword %s saved into context %s"' %
                     (app.keyword.name, context))
         return None
 

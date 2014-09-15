@@ -15,6 +15,10 @@ import os
 import unittest
 import time
 import multiprocessing
+import threading
+import pickle
+from cStringIO import StringIO
+
 
 from vimrunner import Server
 
@@ -40,11 +44,29 @@ HELP_BUFFER = 'gotoword_buffer'
 
 
 class TestGotoword(unittest.TestCase):
+    #TODO: def setUpClasss() to be run once per class
     def setUp(self):
         # start vim as a server
         self.vim = Server(name=SERVER)
         self.client = self.vim.start_gvim()
         # client = self.vim.start()
+        # OR
+        #self.client = self.vim.start()
+        # $TERM -e sh -c ""
+        # xterm -e sh -c "python a-file"
+
+        #def f(q):
+        #    client = self.vim.start_gvim()
+        #    src = StringIO()
+        #    pick = pickle.Pickler(src)
+        #    pick.dump(client)
+        #    q.put(client)
+
+        #q = multiprocessing.Queue()
+        #p = multiprocessing.Process(target=f, args=(q,))
+        #p.start()
+        #self.client = q.get()
+        #p.join()
 
         # setup your plugin in the vim instance
         self.client.add_plugin(PLUGIN_PATH, SCRIPT)
@@ -52,7 +74,7 @@ class TestGotoword(unittest.TestCase):
         self.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
                                       TEST_FILE))
         # prevent vim from opening windows for the same buffer
-        self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+        #self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
     # create a test DB and populate it with keywords and definitions
 
     def tearDown(self):
@@ -92,7 +114,7 @@ class TestGotoword(unittest.TestCase):
 
         # call Vim function search("canvas", 'w') to search
         # top-bottom-top
-        # for a keyword we know is defined and has a definition in database
+        # for a keyword we know it exists and has a definition in database
         line_nr = self.client.search('canvas', flags='w')
         # if there is no match 0 is returned
         self.assertNotEqual('0', line_nr)
@@ -102,7 +124,7 @@ class TestGotoword(unittest.TestCase):
         time.sleep(1)
         # check the Helper cmd opens gotoword buffer
         buffers = self.client.command('ls!')
-        # r is similar to:
+        # buffers is similar to:
         # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
         #  2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
         self.assertTrue(HELP_BUFFER in buffers)
@@ -120,7 +142,7 @@ class TestGotoword(unittest.TestCase):
         # check that the correct help text is displayed in gotoword buffer
         info = self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
         # >>> info
-        # 'Define a canvas section in which you can add Graphics instructions that define how the widget is rendered.'
+        # 'Define a canvas section in which you can add Graphics instruct...'
         self.assertTrue('Define a canvas section' in info)
 
         # Check helper buffer is opened in its own window
@@ -129,34 +151,47 @@ class TestGotoword(unittest.TestCase):
         self.assertNotEqual(int(window_nr), -1)
 
         ## -------------------------
-        # show that 'rgb' doesn't exist in database
+        # show that 'rgb' doesn't exist in database:
+        # call :Helper, input some predefined documentation about the word
         ## -------------------------
         self.keyword_fixture('rgb', buffer_index, buffer_name)
 
         ## -------------------------
         #  call HelperSave with no context
         ## -------------------------
-        self.client.command('HelperSave')
-        #self.client.command('HelperSave "" 1')
-        time.sleep(1)
+        # test when user calls :HelperSave with no arguments, we simulate an
+        # empty argument with "" and we simulate user chose choice number 1:
+        self.client.command('HelperSave "" 1')
+        # because in Vim it is difficult to simulate user input when
+        # unit testing, the above solution was chosen. The ideal test situation
+        # would have been:
+        #self.client.command('HelperSave')
+        # and we would have simulated that user presses the corresponding
+        # keys with self.client.feedkeys('1 \<Enter>')
         ##
+
         ## when prompt requires to answer, insert "1" -> insert context ->
         #p = multiprocessing.Process(target=self.client.feedkeys, args=("\<Enter>",))
         # TODO: I don't think Process is a solution:
         #p = multiprocessing.Process(target=self.client.type, args=("1\<CR>",))
-        p = multiprocessing.Process(target=self.client.type, args=("y",))
-        p.start()
+        #p = multiprocessing.Process(target=self.client.type, args=("y",))
+        #p.start()
+
+#        t = threading.Thread(target=self.client.type, args=("y",))
+#        t.start()
+#        t = threading.Thread(target=type_loop)
+#        t.start()
         #time.sleep(1)
         #p.terminate()
         ##
         #self.client.type("\<CR>")
 
         #self.client.type("1")
-        self.client.type("y")
+        #self.client.type("y")
         #self.client.feedkeys("\<Enter>")
         #self.client.feedkeys('1 \<Enter>')
 
-        ## check definition and keyword are stored in database
+        ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(buffer_index)
         self.assertTrue('rgb' in all_words)
         time.sleep(1)
@@ -173,22 +208,67 @@ class TestGotoword(unittest.TestCase):
         self.assertTrue('rgb' not in all_words)
 
         ## -------------------------
+        #  call HelperSave with no context and user chooses choice 2
+        # which means we wants to provide no context, but save the keyword
+        # anyway
+        ## -------------------------
+        self.keyword_fixture('rgb', buffer_index, buffer_name)
+        self.client.command('HelperSave "" 2')
+        ## check definition and keyword are stored to database
+        all_words = self.get_all_keywords(buffer_index)
+        self.assertTrue('rgb' in all_words)
+        # ok, now delete it to revert database
+        self.client.command('HelperDelete')
+
+        ## -------------------------
+        #  call HelperSave with no context and user chooses choice 3
+        # which means user cancels :HelperSave, so nothing should happen
+        ## -------------------------
+        self.keyword_fixture('rgb', buffer_index, buffer_name)
+        self.client.command('HelperSave "" 3')
+        ## check definition and keyword are not stored to database
+        all_words = self.get_all_keywords(buffer_index)
+        self.assertFalse('rgb' in all_words)
+
+        ## -------------------------
         #  call HelperSave with context that exists in database
         ## -------------------------
         # call :Helper on word 'rgb'
         self.keyword_fixture('rgb', buffer_index, buffer_name)
 
         ## we save again the word 'rgb', but we supply a context
-        self.client.command('HelperSave kivy 1')
+        context = "kivy"
+        self.client.command('HelperSave %s' % context)
         time.sleep(0.5)
+        # Can be deleted?
         # we don't have a prompt for now
         #self.client.type("\<CR>")
-        context = "kivy"
         ctx_words = self.get_context_keywords(buffer_index, context)
         self.assertTrue('rgb' in ctx_words)
 
         # delete 'rgb'
         self.client.command('HelperDelete')
+
+        ## -------------------------
+        #  call HelperSave with context that doesn't exist in database
+        ## -------------------------
+        # call :Helper on word 'rgb'
+        self.keyword_fixture('rgb', buffer_index, buffer_name)
+
+        ## we save again the word 'rgb', but we supply a context that doesn't
+        # exist yet in database
+        context = "newcontext"
+        self.client.command('HelperSave %s' % context)
+        time.sleep(0.5)
+        ctx_words = self.get_context_keywords(buffer_index, context)
+        self.assertTrue('rgb' in ctx_words)
+
+        # delete 'rgb'
+        self.client.command('HelperDelete')
+        # delete context
+        self.client.command('HelperDeleteContext %s' % context)
+        all_contexts = self.get_all_contexts(buffer_index)
+        self.assertFalse(context in all_contexts)
 
         ## -------------------------
         ## test HelperAllContexts

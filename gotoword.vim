@@ -195,15 +195,23 @@ function! s:Helper_save(...)             " fct has a variable number of args
 "      python context = ''
 "    endtry
 
-    python context = gotoword.vim.eval("context")
-    python context = unicode(context.strip()).lower()
-    python test_answer = gotoword.vim.eval("test_answer")
-    "python test_answer = unicode(test_answer).lower()
-    python test_answer = test_answer.strip().lower()
-    python app.helper_save(context, test_answer)
-    " OR
-    " gotoword.helper_save(context, gotoword.store)
-    " TODO: gotoword.helper_save(keyword, context, gotoword.store)
+python << EOF
+context = gotoword.vim.eval("context")
+# for testing purposes, context that is "" in vim will be transformed to '' 
+# (empty string) in python; 
+if context == '""':
+    context = ''       # empty string => False in a boolean context
+context = unicode(context.strip()).lower()
+test_answer = gotoword.vim.eval("test_answer")
+#python test_answer = unicode(test_answer).lower()
+test_answer = test_answer.strip().lower()
+
+app.helper_save(context, test_answer)
+# OR
+# gotoword.helper_save(context, gotoword.store)
+# TODO: gotoword.helper_save(keyword, context, gotoword.store)
+
+EOF
 endfunction
 
 
