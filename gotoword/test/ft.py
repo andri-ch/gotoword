@@ -14,11 +14,6 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import os
 import unittest
 import time
-import multiprocessing
-import threading
-import pickle
-from cStringIO import StringIO
-
 
 from vimrunner import Server
 
@@ -42,32 +37,19 @@ SCRIPT = 'gotoword.vim'
 HELP_BUFFER = 'gotoword_buffer'
 #HELP_BUFFER = '~/.vim/andrei_plugins/gotoword/helper_buffer'
 
+# run tests in the same order they are defined in the file
+unittest.defaultTestLoader.sortTestMethodsUsing = None
+
 
 class TestGotoword(unittest.TestCase):
-    #TODO: def setUpClasss() to be run once per class
-    def setUp(self):
+    @classmethod
+    def setUpClass(self):
+        "It is run once per class."
         # start vim as a server
         self.vim = Server(name=SERVER)
-        self.client = self.vim.start_gvim()
-        # client = self.vim.start()
-        # OR
-        #self.client = self.vim.start()
-        # $TERM -e sh -c ""
-        # xterm -e sh -c "python a-file"
-
-        #def f(q):
-        #    client = self.vim.start_gvim()
-        #    src = StringIO()
-        #    pick = pickle.Pickler(src)
-        #    pick.dump(client)
-        #    q.put(client)
-
-        #q = multiprocessing.Queue()
-        #p = multiprocessing.Process(target=f, args=(q,))
-        #p.start()
-        #self.client = q.get()
-        #p.join()
-
+        self.client = self.vim.start()
+        #self.client = self.vim.start_gvim()
+        self.client = self.vim.start_in_other_terminal()
         # setup your plugin in the vim instance
         self.client.add_plugin(PLUGIN_PATH, SCRIPT)
         # edit test file
@@ -75,7 +57,14 @@ class TestGotoword(unittest.TestCase):
                                       TEST_FILE))
         # prevent vim from opening windows for the same buffer
         #self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
-    # create a test DB and populate it with keywords and definitions
+        # create a test DB and populate it with keywords and definitions
+
+    @classmethod
+    def tearDownClass(cls):
+        pass
+
+    def setUp(self):
+        pass
 
     def tearDown(self):
         # close vim server
