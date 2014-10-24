@@ -761,11 +761,13 @@ class EntryState(object):
             # for The peculiar nature of 'and' and 'or'
             # case when kw doesn't exist in DB and context was not given by
             # user
+            # debug flags:
             app.kw = kw
             app.new_context0 = context
             app.bol = (not kw) and (not context)
             return ReadContextState()
         elif (not kw) and context:
+            # debug flags:
             app.kw2 = kw
             app.new_context1 = context
             app.bol2 = context and (not kw)
@@ -812,13 +814,14 @@ class ReadContextState(object):
         #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
         #answer = vim.eval('user_input')
 
-        #answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
-        #        "1. Yes, I will provide a context", \
-        #        "2. No, I won't provide a context", \
-        #        "3. Abort"])
-        #        """)
+        answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
+                "1. Yes, I will provide a context", \
+                "2. No, I won't provide a context", \
+                "3. Abort"])
+                """)
         # inputlist() is blocking the prompt, waiting for a key from user
-        # inputlist() returns '0' if no option is chosen
+        # inputlist() returns '0' if no option is chosen or if first option is
+        # chosen
 
         #print("Do you want to specify a context that this definition of the word "
         #      "applies in?")
@@ -838,7 +841,7 @@ class ReadContextState(object):
         ##vim.command('exe "endif"')
         #answer = vim.eval('c')
 
-        answer = vim.eval('confirm("Do you want to define a context that this definition of the word applies in?", "&Yes\n&No\n&Cancel")')
+        #answer = vim.eval('confirm("Do you want to define a context that this definition of the word applies in?", "&Yes\n&No\n&Cancel")')
         answer = answer.strip().lower()
         # use test_answer if it is supplied (when testing)
         answer = test_answer if test_answer else answer
@@ -846,12 +849,14 @@ class ReadContextState(object):
         app.answer = answer
         #if answer.startswith('1'):
         #if answer.startswith(' 1'):
-        if answer == '1' or answer.startswith('y'):
+        #if answer == '1' or answer.startswith('y'):
+        if answer == '0' or answer.startswith('y'):
             # read context ....
             # TODO: NewContextState()
-            return NewKeywordState()
+            #return NewKeywordState()
+            return NewContextState()
         elif answer.startswith('2') or answer.startswith('n'):
-            app.nocontextno = True
+            app.nocontextno = True        # debug
             return NewKeywordState()
         #elif answer.startswith('0') or answer.startswith('a'):
         elif answer.startswith('3') or answer.startswith('a'):
@@ -884,6 +889,8 @@ class NewKeywordState(object):
 class NewContextState(object):
     "Creates a context and stores it to database."
     def evaluate(self, app, kw, context, test_answer):
+        vim.command('echomsg "You entered: [\"%s\"]"' % app.answer)
+        return None
         pass
 
 #### MAIN ###
