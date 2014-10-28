@@ -136,6 +136,15 @@ if !exists(":HelperContextWords")
   "   :HelperContextWords 'python'
 endif
 
+if !exists(":HelperWordContexts")             
+"" OBSOLETE, it should be a python function
+  " lists all contexts current keyword belongs to (eg. unittest word could
+  " belong to 'python' context and to 'testing' context, etc.)
+  command -nargs=0 HelperWordContexts call s:Helper_word_contexts()
+  " SYNOPSIS
+  "   :HelperWordContexts
+endif
+
 
 " --------------------------------
 " FUNCTIONS 
@@ -264,6 +273,14 @@ function! s:Helper_context_words(context)
     python app.helper_context_words(context)
 endfunction
 
+
+function! s:Helper_word_contexts()
+"    " Displays in help buffer all contexts the current keyword belongs to,
+"    " sorted in alphabetical order
+"    " TODO: this should work for the current keyword or for the word under the
+"    " cursor?
+    python app.helper_word_contexts()
+endfunction
 
 
 " MAIN 

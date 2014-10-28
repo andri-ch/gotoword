@@ -9,7 +9,7 @@ from os import sys, path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
 import os
-import unittest
+#import unittest
 import pytest
 import time
 
@@ -19,12 +19,6 @@ from vimrunner import Server
 import gotoword
 import utils
 
-# start vim server with GUI, it is better this way because it doesn't mess up
-# the test terminal
-# OR
-# start vim server inside terminal
-
-# the following tests are performed on a test database
 
 SERVER = 'gotoword'
 TEST_FILE = 'ft_test_text'
@@ -35,11 +29,7 @@ SCRIPT = 'gotoword.vim'
 HELP_BUFFER = 'gotoword_buffer'
 #HELP_BUFFER = '~/.vim/andrei_plugins/gotoword/helper_buffer'
 
-### run tests in the same order as they are defined in the file ###
-#unittest.defaultTestLoader.sortTestMethodsUsing = None
 
-
-#class TestGotoword(unittest.TestCase):
 @pytest.fixture(scope="class")
 def server_setup(request):
     request.cls.vim = Server(name=SERVER)
@@ -78,59 +68,7 @@ def server_setup(request):
 
 @pytest.mark.usefixtures("server_setup")
 @pytest.mark.incremental
-class TestGotoword(unittest.TestCase):
-#    buffer_index = None
-#    buffer_name = None
-
-    #@classmethod
-#    def setUpClass(self):
-#        "It is run once per class."
-#        # start vim as a server
-#        self.vim = Server(name=SERVER)
-#        #self.client = self.vim.start()
-#        #self.client = self.vim.start_gvim()
-#        self.client = self.vim.start_in_other_terminal()
-#        # client is connected to vim server and all actions are executed
-#        # inside vim editor
-#
-#        # setup your plugin in the vim instance
-#        self.client.add_plugin(PLUGIN_PATH, SCRIPT)
-#        # edit test file
-#        self.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
-#                                      TEST_FILE))
-#        # prevent vim from opening windows for the same buffer
-#        #self.client.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
-#        # create a test DB and populate it with keywords and definitions
-#
-#        buffers = self.client.command('ls!')
-#        # buffers is similar to:
-#        # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
-#        #  2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
-#        if not HELP_BUFFER in buffers:
-#            raise RuntimeError("initialization failed, no help buffer exists.")
-#        # get buffer index and name:
-#        buffers = buffers.split("\n")
-#        buffers = map(str.strip, buffers)
-#        buf = [buf_info for buf_info in buffers if HELP_BUFFER in buf_info]
-#        # buf is a one element list, so
-#        buf = buf.pop()
-#        # >>> buf
-#        # '2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
-#
-#        # make buffer_index persistent across test cases -> make it a class
-#        # variable, not an instance variable, because new instances are created
-#        # for each test case:
-#        TestGotoword.buffer_index = buf[0]
-#        #TestGotoword.buffer_index = buf[0]
-#        TestGotoword.buffer_name = buf.split()[2]
-#        if self.buffer_name is '':
-#            raise RuntimeError("buffer name is empty, so no buffer exists")
-
-#    @classmethod
-#    def tearDownClass(cls):
-#        "It is run once per class"
-#        pass
-
+class TestGotoword():
     def setUp(self):
         pass
 
@@ -139,34 +77,13 @@ class TestGotoword(unittest.TestCase):
         #self.vim.quit()
         pass
 
+    @pytest.mark.testit
     def test_test_file_is_opened(self):
-        # test a vim buffer is opened with test file
-        self.assertTrue(TEST_FILE in self.client.command('ls'))
-        #assert (TEST_FILE in self.client.command('ls'))
+        "Test a vim buffer is opened with the test file."
+        #self.assertTrue(TEST_FILE in self.client.command('ls'))
+        assert (TEST_FILE in self.client.command('ls'))
 
-#    def test_gotoword_buffer_is_created_when_plugin_is_loaded(self):
-#        buffers = self.client.command('ls!')
-#        # buffers is similar to:
-#        # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
-#        #  2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
-#        self.assertTrue(HELP_BUFFER in buffers)
-#        # get buffer index and name:
-#        buffers = buffers.split("\n")
-#        buffers = map(str.strip, buffers)
-#        buf = [buf_info for buf_info in buffers if HELP_BUFFER in buf_info]
-#        # buf is a one element list, so
-#        buf = buf.pop()
-#        # >>> buf
-#        # '2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
-#
-#        # make buffer_index persistent across test cases -> make it a class
-#        # variable, not an instance variable, because new instances are created
-#        # for each test case:
-#        TestGotoword.buffer_index = buf[0]
-#        #TestGotoword.buffer_index = buf[0]
-#        TestGotoword.buffer_name = buf.split()[2]
-#        self.assertNotEqual(self.buffer_name, '')
-
+    @pytest.mark.testit
     def test_all_Helper_commands_exist(self):
         """
         tests if :Helper vim command opens the description of the word under cursor.
@@ -187,21 +104,23 @@ class TestGotoword(unittest.TestCase):
         # extract the command names by splitting each text line
         cmds = [elem[0] for elem in map(str.split, out)]
         # check all plugin commands exist
-        self.assertTrue('Helper' in cmds)
-        self.assertTrue('HelperSave' in cmds)
-        self.assertTrue('HelperDelete' in cmds)
-        self.assertTrue('HelperDeleteContext' in cmds)
-        self.assertTrue('HelperAllWords' in cmds)
-        self.assertTrue('HelperAllContexts' in cmds)
-        self.assertTrue('HelperContextWords' in cmds)
+        assert ('Helper' in cmds)
+        assert ('HelperSave' in cmds)
+        assert ('HelperDelete' in cmds)
+        assert ('HelperDeleteContext' in cmds)
+        assert ('HelperAllWords' in cmds)
+        assert ('HelperAllContexts' in cmds)
+        assert ('HelperContextWords' in cmds)
+        assert ('HelperWordContexts' in cmds)
 
+    @pytest.mark.testit
     def test_command_Helper_on_existing_keyword(self):
         # call Vim function search("canvas", 'w') to search
         # top-bottom-top
         # for a keyword we know it exists and has a definition in database
         line_nr = self.client.search('canvas', flags='w')
         # if there is no match 0 is returned
-        self.assertNotEqual('0', line_nr)
+        assert '0' != line_nr
 
         # test Helper command is working
         self.client.command('Helper')
@@ -211,13 +130,14 @@ class TestGotoword(unittest.TestCase):
         info = self.client.eval('getbufline(%s, 1, "$")' % TestGotoword.buffer_index)
         # >>> info
         # 'Define a canvas section in which you can add Graphics instruct...'
-        self.assertTrue('Define a canvas section' in info)
+        assert ('Define a canvas section' in info)
 
         # Check helper buffer is opened in its own window
         window_nr = self.client.eval('bufwinnr(%s)' % TestGotoword.buffer_index)
         # if the buffer or no window exists for it, -1 is returned by bufwinnr()
-        self.assertNotEqual(int(window_nr), -1)
+        assert (int(window_nr) != -1)
 
+    #@pytest.mark.testit
     def test_HelperSave_new_keyword_no_context_but_given_when_prompted(self):
         ## -------------------------
         # show that 'rgb' doesn't exist in database:
@@ -230,42 +150,23 @@ class TestGotoword(unittest.TestCase):
         ## -------------------------
         # test when user calls :HelperSave with no arguments, we simulate an
         # empty argument with "" and we simulate user chose choice number 1:
-        #self.client.command('HelperSave "" 1')
+        self.client.command('HelperSave "" 0')
         # because in Vim it is difficult to simulate user input when
         # unit testing, the above solution was chosen. The ideal test situation
         # would have been:
-        self.client.command('HelperSave')
+        #self.client.command('HelperSave')
         # and we would have simulated that user presses the corresponding
         # keys with self.client.feedkeys('1 \<Enter>')
         ##
-        self.client.feedkeys('1 \<Enter>')
-
-        ## when prompt requires to answer, insert "1" -> insert context ->
-        #p = multiprocessing.Process(target=self.client.feedkeys, args=("\<Enter>",))
-        # TODO: I don't think Process is a solution:
-        #p = multiprocessing.Process(target=self.client.type, args=("1\<CR>",))
-        #p = multiprocessing.Process(target=self.client.type, args=("y",))
-        #p.start()
-
-#        t = threading.Thread(target=self.client.type, args=("y",))
-#        t.start()
-#        t = threading.Thread(target=type_loop)
-#        t.start()
-        #time.sleep(1)
-        #p.terminate()
-        ##
-        #self.client.type("\<CR>")
-
-        #self.client.type("1")
-        #self.client.type("y")
-        #self.client.feedkeys("\<Enter>")
-        #self.client.feedkeys('1 \<Enter>')
+        #self.client.feedkeys('2 \<Enter>')
 
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
-        self.assertTrue('rgb' in all_words)
+        assert ('rgb' in all_words)
+        # TODO check that 'rgb' has context it belongs to
         time.sleep(1)
 
+    #@pytest.mark.testit
     def test_HelperDelete_on_current_keyword(self):
         ## -------------------------
         #  test HelperDelete
@@ -276,19 +177,23 @@ class TestGotoword(unittest.TestCase):
         self.client.command('HelperDelete')
         # check 'rgb' is deleted
         all_words = self.get_all_keywords(self.buffer_index)
-        self.assertTrue('rgb' not in all_words)
+        assert ('rgb' not in all_words)
 
+    #@pytest.mark.testit
     def test_HelperSave_new_keyword_no_context_not_given_when_prompted(self):
         ## -------------------------
-        #  call HelperSave with no context and user chooses choice 2
-        # which means we wants to provide no context, but save the keyword
+        #  call HelperSave with no context and user chooses choice 1
+        # which means he wants to provide no context, but save the keyword
         # anyway
         ## -------------------------
         self.keyword_fixture('rgb', self.buffer_index, self.buffer_name)
-        self.client.command('HelperSave "" 2')
+        self.client.command('HelperSave "" 1')
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
-        self.assertTrue('rgb' in all_words)
+        assert ('rgb' in all_words)
+        # check 'rgb' is saved with no context
+        word_contexts = self.get_keyword_contexts(self.buffer_index)
+        assert ("doesn't belong" in word_contexts)
         # ok, now delete it to revert database
         self.client.command('HelperDelete')
 
@@ -298,10 +203,10 @@ class TestGotoword(unittest.TestCase):
         # which means user cancels :HelperSave, so nothing should happen
         ## -------------------------
         self.keyword_fixture('rgb', self.buffer_index, self.buffer_name)
-        self.client.command('HelperSave "" 3')
+        self.client.command('HelperSave "" 2')
         ## check definition and keyword are not stored to database
         all_words = self.get_all_keywords(self.buffer_index)
-        self.assertFalse('rgb' in all_words)
+        assert ('rgb' not in all_words)
 
     def test_HelperSave_new_keyword_and_context_given(self):
         ## -------------------------
@@ -318,7 +223,7 @@ class TestGotoword(unittest.TestCase):
         # we don't have a prompt for now
         #self.client.type("\<CR>")
         ctx_words = self.get_context_keywords(self.buffer_index, context)
-        self.assertTrue('rgb' in ctx_words)
+        assert ('rgb' in ctx_words)
 
         # delete 'rgb'
         self.client.command('HelperDelete')
@@ -336,14 +241,14 @@ class TestGotoword(unittest.TestCase):
         self.client.command('HelperSave %s' % context)
         time.sleep(0.5)
         ctx_words = self.get_context_keywords(self.buffer_index, context)
-        self.assertTrue('rgb' in ctx_words)
+        assert ('rgb' in ctx_words)
 
         # delete 'rgb'
         self.client.command('HelperDelete')
         # delete context
         self.client.command('HelperDeleteContext %s' % context)
         all_contexts = self.get_all_contexts(self.buffer_index)
-        self.assertFalse(context in all_contexts)
+        assert (context not in all_contexts)
 
     def test_HelperAllContexts(self):
         ## -------------------------
@@ -353,7 +258,7 @@ class TestGotoword(unittest.TestCase):
         # test at least one context exists
         # TODO: contexts should be retrieved from DB and test for equality
         # between the two
-        self.assertTrue('python' in all_contexts)
+        assert ('python' in all_contexts)
         time.sleep(0.5)
 
     def test_HelperContextWords(self):
@@ -368,7 +273,7 @@ class TestGotoword(unittest.TestCase):
         # from DB table
         ctx = utils.Context.find_context(gotoword.STORE, unicode(context))
         # compare the two numbers
-        self.assertEqual(ctx.keywords.count(), len(ctx_words.split("\n")) - 1)
+        assert (ctx.keywords.count() == len(ctx_words.split("\n")) - 1)
         # len(lines) - 1 because we omit the title line
 
     ### other utilitary functions ###
@@ -385,7 +290,7 @@ class TestGotoword(unittest.TestCase):
         return self.get_cmd_output('HelperAllWords', buffer_index)
 
     def get_all_contexts(self, buffer_index):
-        "Same as get_all_keywords"
+        "Displays the output of HelperAllContexts vim command."
         return self.get_cmd_output('HelperAllContexts', buffer_index)
 
     def get_context_keywords(self, buffer_index, context):
@@ -396,6 +301,10 @@ class TestGotoword(unittest.TestCase):
         """
         return self.get_cmd_output('HelperContextWords %s' % context,
                                    buffer_index)
+
+    def get_keyword_contexts(self, buffer_index):
+        """Displays the output of HelperWordContexts vim command."""
+        return self.get_cmd_output('HelperWordContexts', buffer_index)
 
     def keyword_fixture(self, kword, buffer_index, buffer_name):
         """
@@ -420,14 +329,15 @@ class TestGotoword(unittest.TestCase):
 
         # locate it in current document
         line_nr = self.client.search(kword, flags='w')
-        self.assertNotEqual('0', line_nr)
+        assert 0 != line_nr
+        #self.assertNotEqual('0', line_nr)
 
         # display help text in Help buffer about "rgb"
         self.client.command('Helper')
 
         # check if definition informs user that word doesn't exist in database
         info = self.client.eval('getbufline(%s, 1)' % buffer_index)
-        self.assertTrue('"%s" doesn\'t exist' % kword in info)
+        assert ('"%s" doesn\'t exist' % kword in info)
 
         # note that cursor is positioned on kword word located previously in
         # test document;

@@ -610,12 +610,39 @@ class App(object):
         words_generator = storm_context.keywords.values(utils.Keyword.name)
         words = [w for w in words_generator]
         words.sort()
+        # TODO: the following can be split into a template, the above is the
+        # view
         # add a title on the first line
         self.vim_wrapper.help_buffer[0:0] = [
             "The following keywords have a meaning (definition) in '%s' "
             "context:" % storm_context.name]
         self.vim_wrapper.help_buffer[1:] = words
         return words
+
+    @database_operations
+    def helper_word_contexts(self):
+        """
+        It is used for testing, it should not be available to the user.
+        Returns a list of contexts.
+        """
+        contexts = None
+        if self.keyword:
+            contexts_generat = self.keyword.contexts.values(utils.Context.name)
+            contexts = [c for c in contexts_generat]
+            contexts.sort()
+            self._display_word_contexts(self.keyword, contexts)
+
+    def _display_word_contexts(self, kw, contexts):
+        # add a title on the first line
+        if contexts:
+            self.vim_wrapper.help_buffer[0:0] = [
+                "The keyword '%s' has information belonging to the following "
+                "contexts:" % kw.name]
+            self.vim_wrapper.help_buffer[1:] = contexts
+        else:
+            self.vim_wrapper.help_buffer[:] = [
+                "The keyword '%s' has information that doesn't belong to any "
+                "context" % kw.name]
 
 
 class VimWrapper(object):
@@ -723,7 +750,8 @@ class VimWrapper(object):
             # moved to utils
             contexts_generator = keyword.contexts.values(utils.Context.name)
             contexts = [c for c in contexts_generator]
-            # add a title line at the top
+            # add a title line at the top;
+            # TODO: is the title line removed when kw is updated?
             self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
                                      (keyword.name, " ".join(contexts))]
             # load content in buffer, previous content is deleted
@@ -772,7 +800,7 @@ class EntryState(object):
             app.new_context1 = context
             app.bol2 = context and (not kw)
             app.new_context = True
-            # case when kw doesn't exist in DB and context was given by user
+            # case when kw doesn't exist in DB and context was given by user;
             # context was supplied by user to save keyword in that context;
             # check if it exists in the database (if it is not a new one)
             ctx = utils.Context.find_context(STORE, context)
@@ -790,6 +818,10 @@ class EntryState(object):
             app.context = ctx
             # continue with creating and saving a keyword
             return NewKeywordState()
+        elif kw and (not context):
+            app.kwnotcontext = True
+            # kw exists in db, context was not given by user -> update kw
+            return None
         else:
             return None
 
@@ -815,9 +847,9 @@ class ReadContextState(object):
         #answer = vim.eval('user_input')
 
         answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
-                "1. Yes, I will provide a context", \
-                "2. No, I won't provide a context", \
-                "3. Abort"])
+                "0. Yes, I will provide a context [0 and press <Enter>]", \
+                "1. No, I won't provide a context [1 and press <Enter>]", \
+                "2. Abort [2 and press <Enter>]" ])
                 """)
         # inputlist() is blocking the prompt, waiting for a key from user
         # inputlist() returns '0' if no option is chosen or if first option is
@@ -852,16 +884,19 @@ class ReadContextState(object):
         #if answer == '1' or answer.startswith('y'):
         if answer == '0' or answer.startswith('y'):
             # read context ....
-            # TODO: NewContextState()
-            #return NewKeywordState()
+            # debug:
+            vim.command('echo "\n"')
+            vim.command('echomsg "You entered: [\"%s\"]"' % app.answer)
             return NewContextState()
-        elif answer.startswith('2') or answer.startswith('n'):
+            #return NewKeywordState()
+        elif answer.startswith('1') or answer.startswith('n'):
             app.nocontextno = True        # debug
             return NewKeywordState()
+            #return NewContextState()
         #elif answer.startswith('0') or answer.startswith('a'):
-        elif answer.startswith('3') or answer.startswith('a'):
+        elif answer.startswith('2') or answer.startswith('a'):
             # Abort
-            vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+            vim.command('echo ""')     # make prompt pass to next line ???!, for pretty printing
             vim.command('echomsg "You entered: [\"%s\"]"' % answer)
             vim.command('echo "You entered: [\"%s\"]"' % test_answer)
             vim.command('echo ""')     # make prompt pass to next line, for pretty printing
@@ -876,6 +911,7 @@ class NewKeywordState(object):
     "Creates a keyword and stores it to database."
     @database_operations
     def evaluate(self, app, kw, context, test_answer):
+        # global app
         app.keyword = utils.create_keyword(STORE, app.word,
                                            app.vim_wrapper.help_buffer)
         # add keyword definition to context
@@ -887,11 +923,53 @@ class NewKeywordState(object):
 
 
 class NewContextState(object):
-    "Creates a context and stores it to database."
+    """Creates a context and stores it to database. It returns a
+    NewKeywordState, because we use this class only when user wants to define
+    a keyword and a context, so first we define a context then we define a
+    keyword and we add it to the context.
+    """
+    @database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
-        vim.command('echomsg "You entered: [\"%s\"]"' % app.answer)
-        return None
-        pass
+        #global app
+        # capture from stdin the context name
+        message = "Enter a one word context name: \n"
+        vim.command('call inputsave()')
+        vim.command("let user_input = input('%s')" % message)
+        vim.command('call inputrestore()')
+        answer = vim.eval('user_input')
+        # sanitize it (strip, lowercase, unicode it, etc.)
+        answer = unicode(answer.strip().lower())
+        # debug
+        vim.command('echo "\n"')
+        vim.command('echomsg "You entered: \'%s\'"' % answer)
+
+        # validate it
+        res = STORE.find(utils.Context, utils.Context.name == answer).one()
+        if res:
+            raise RuntimeError("Context '%s' already exists!" % context)
+
+        context = utils.Context(name=answer)
+        # make it a storm object
+        context = STORE.add(context)
+
+        message = "Enter a short description of the context you just defined: \n"
+        # capture the short description from stdin
+        vim.command('call inputsave()')
+        vim.command("let user_input = input('%s')" % message)
+        vim.command('call inputrestore()')
+        answer = vim.eval('user_input')
+        # sanitize it (strip, lowercase, unicode it, etc.)
+        answer = unicode(answer.strip().lower())
+        # debug
+        vim.command('echo "\n"')
+        vim.command('echomsg "You entered: [\'%s\']"' % answer)
+        # add it to the storm object, to the appropriate field
+        # TODO: add a 'description' field to utils.Context
+        #context.description = answer
+        STORE.commit()
+        app.context = context
+        #return None
+        return NewKeywordState()
 
 #### MAIN ###
 
