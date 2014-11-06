@@ -8,6 +8,18 @@ import logging
 # for database:
 from storm.locals import Store
 
+### import vim python library ###
+try:
+    import vim
+    # the vim module contains everything we need to interact with vim
+    # editor from python, but only when python is used inside vim.
+    # Eg. you can't import vim in ipython like a normal module
+    # More info here:
+    # http://vimdoc.sourceforge.net/htmldoc/if_pyth.html#Python
+except ImportError:
+    print("Script must be run inside vim editor!")
+    print("Either quit or use some variables and functions")
+    #sys.exit()
 
 def set_up_logging(default_level):
     ### DEBUG -> is the lowest level ###
@@ -67,6 +79,7 @@ sys.path.insert(1, SOURCE_DIR)
 # Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
 import utils               # should be replaced by import utils
 
+
 # plugin's database that holds all the keywords and their info
 DB_NAME = 'keywords.db'
 DATABASE = utils.create_database('sqlite:' + os.path.join(VIM_FOLDER,
@@ -89,20 +102,6 @@ logger.debug("Following constants are defined: \n"
              extra={'className': ""}
              )
 
-# move to utils.py
-def create_vim_list(values):
-    """creates the Vim editor equivalent of python's repr(a_list).
-
-        >>> create_vim_list(['first line', 'second line'])
-        '["first line", "second line"]'
-
-    We need double quotes not single quotes.
-    This result can be fed to vim's eval function to create a list in vim.
-    """
-    values_with_quotes = ('"' + elem + '"' for elem in values)
-    return '[%s]' % ', '.join(values_with_quotes)
-    # as a one liner:
-    #return '[%s]' % ', '.join("\"%s\"" % elem for elem in values)
 
 # move to utils.py
 def strip(s):
@@ -129,6 +128,8 @@ def strip(s):
     so obj.__class__ is not 'str' but of type 'type' , so we need to call
     repr(s) to get the string notation and get rid of the characters we don't
     want.
+
+    It is used by the logging system.
     """
     return repr(s).lstrip("<class '").rstrip("'>")
 
@@ -193,184 +194,6 @@ def database_operations(f):
         return res
     return wrapper_operations
 
-
-class VimBuf(object):           # to be deleted?
-    """
-    Emulate a vim buffer whose index has the value received in the constructor.
-    An instance of this class can read and write lines to the vim buffer it
-    emulates.
-
-    A vim buffer partially behaves like a list, so this class
-    wraps a python list, but will take into account that buffer line indexing
-    starts from 1, not from 0 like in a python list.
-
-    Eg::
-
-        buf = VimBuf(index)
-        buf[1]
-        # should output first line of vim buffer, not second line
-        # like a python list would.
-
-    """
-    def __init__(self, index):
-        # store the vim index (buffer number) of the vim buffer that
-        # it emulates.
-        self.index = index
-        self._buffer = None     # will be a list
-
-    def __str__(self):
-        self._read_vim_buffer()
-        return "\n".join(self._buffer)
-
-    def __repr__(self):
-        return "VimBuf(%s)" % self.index
-
-    def _read_vim_buffer(self):
-        """Read vim buffer contents so that what this buffer stores is the
-        same with what's displayed in the actual vim buffer.
-        """
-        # get all lines from vim buffer as a list
-        self._buffer = vim.eval('getbufline(%s, 1, "$")' % self.index).split("\n")
-        # TODO: this is where you can make list values start from index = 1,
-        # just like it is for vim buffers
-
-    def __get__(self):
-        """
-        This method is part of the descriptor protocol along with __set__(),
-        __delete__().
-        Suppose:
-            buf = VimBuf(...)
-        Called when:
-            var = buf
-        """
-        logger.debug("", extra={'className': strip(self.__class__)})
-        # empty message "" is needed because a message is mandatory
-        raise NotImplementedError
-        #self._read_vim_buffer()
-        #return self
-
-    def __set__(self, value):
-        logger.debug("called with value %s" % value,
-                     extra={'className': strip(self.__class__)})
-        raise NotImplementedError
-
-    @toggle_activate            # activate it before changing a vim buffer
-    @toggle_readonly            # remove any readonly buffer protection
-    def __setitem__(self, index, value):
-        """
-        Called when obj[i] = value or obj[i:j] = sequence.
-        type(index) = int or slice obj.
-        It should write straight to vim buffer.
-        It should behave like vim's setline().
-        """
-        # log when it enters function
-        logger.debug("", extra={'className': strip(self.__class__)})
-        # define flag for succesful operation
-        exit_code = '1'            # 0 is True, 1 is False
-
-        value = create_vim_list(value)
-        # we do this because when type(index) == int we can assign one line
-        # or multiple lines:
-        # setline(1, ["one line"])  AND
-        # setline(1, ["one line", "another line"])
-
-        if isinstance(index, int):
-            # TODO: catch IndexError when index is just one unit bigger than
-            # last index and append to list to emulate vim behaviour.
-            #self._buffer[index] = value
-            exit_code = vim.eval('setline(%s, %s)' % (index + 1, value))
-            # setline's 1st arg is incremented because buffer indexing starts
-            # from 1
-            #succeded = vim.eval('setline(2, "test - a vim string")')
-            #succeded = vim.eval('setline(5, strftime("%c"))')
-        elif isinstance(index, slice):
-            # update self._buffer
-            self._read_vim_buffer()
-            start, stop, step = index.indices(len(self._buffer))
-            #self._buffer[start:stop] = value
-            # it seems that _buffer[start:stop:step] is not accepted by the
-            # underlying vim buffer
-
-            # if index is a slice we also expect that value is a list
-            if not isinstance(value, list):
-                raise TypeError("value must be a list of strings not a %s" %
-                                type(value))
-            exit_code = vim.eval('setline(%s, %s)' % (start + 1, value))
-            # there are two ways to feed text to setline();
-            # as above, by creating a list:
-            # setline(index, ["line 1", "line 2"])
-            # second way:
-            #for index, value in zip(range(1, 3), ["first line", "second"]):
-            #    vim.eval('setline(%s, "%s")' % (index, value))
-        else:
-            raise TypeError("index must be either an int or a slice object")
-
-        if exit_code != '0':
-            logger.debug("didn't manage to update buffer in vim server with "
-                         "value %s" % value, extra={'className': strip(self.__class__)})
-
-    def __getitem__(self, index):
-        """
-        type(index) = int or slice obj. Called when var = obj[i:j]
-        """
-        logger.debug("", extra={'className': strip(self.__class__)})
-        self._read_vim_buffer()
-        if isinstance(index, int):
-            return self._buffer[index]
-        elif isinstance(index, slice):
-            start, stop, step = index.indices(len(self._buffer))
-            return self._buffer[start:stop]
-        else:
-            raise TypeError("index must be either an int or a slice object not a %s" %
-                            type(index))
-
-    def append(self, value):
-        """Adds lines after last line of vim buffer.
-        It makes use of vim's setline() property:
-        When {lnum} is just below the last line the {text} will be
-        added as a new line.
-        So this method makes index to be one unit greater than the highest
-        current index.
-        """
-        self._read_vim_buffer()
-        self[len(self._buffer) - 1] = value
-
-
-class VimBuffers(object):         # to be deleted?
-    """Implements the vim list of buffers."""
-    def __init__(self):
-        self._buffer = None
-
-    def __str__(self):
-        # TODO: it should print the vim buffer list:  index, name
-        pass
-
-    def __getitem__(self, index):
-        """
-        type(index) = int. Called when var = obj[i]
-        Exists because it is used by vim.buffers[i] to get a vim buffer if vim
-        is the python module supplied by vim or if it is the vim server this
-        script has created.
-        """
-        return VimBuf(index)
-
-    def __setitem__(self, index, value):
-        pass
-        # TODO: implement it
-
-
-### import vim python library ###
-try:
-    import vim
-    # the vim module contains everything we need to interact with vim
-    # editor from python, but only when python is used inside vim.
-    # Eg. you can't import vim in ipython like a normal module
-    # More info here:
-    # http://vimdoc.sourceforge.net/htmldoc/if_pyth.html#Python
-except ImportError:
-    print("Script must be run inside vim editor!")
-    print("Either quit or use some variables and functions")
-    #sys.exit()
 
     # TODO:
     # toggle_activate, toggle_readonly should be part of vim client server

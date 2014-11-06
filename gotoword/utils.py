@@ -275,14 +275,17 @@ All these lines can be deleted when adding info.''' % word
 
 
 def create_vim_list(values):
-    """creates the Vim editor equivalent of python's repr(a_list).
+    """creates the Vim editor's equivalent of python's repr(a_list).
 
         >>> create_vim_list(['first line', 'second line'])
         '["first line", "second line"]'
 
-    We need double quotes not single quotes.
+    values - a list of strings
+    We need double quotes not single quotes to create a Vim list.
+    Returns a string that is a properly written Vim list of strings.
     This result can be fed to vim's eval function to create a list in vim.
     """
+
     values_with_quotes = ('"' + elem + '"' for elem in values)
     return '[%s]' % ', '.join(values_with_quotes)
     # as a one liner:
