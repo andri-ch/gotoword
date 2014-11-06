@@ -211,38 +211,54 @@ def find_keyword(store, word):
     return keyword
 
 
+#    Workflow:
+#    with cursor on the word that will become a keyword,
+#    user calls vim function Helper, which opens an empty helper_buffer or
+#    empties the one already open.
+#    User edits the buffer with info he wants to store as keyword.info or keyword.cmd
+#    User saves the contents of the buffer to database by calling HelperSave vim cmd or
+#    HelperSaveInfo which are aliases to HelperSave(flag).
+#    '''
+#    #if not hasattr(word, "name"):
+#    #    keyword = Keyword(name=word)
+
+# TODO: unit tests for all these functions
 def create_keyword(store, word, buf):
-    '''Creates a new keyword with name=word and updates the database.
-    Workflow:
-    with cursor on the word that will become a keyword,
-    user calls vim function Helper, which opens an empty helper_buffer or
-    empties the one already open.
-    User edits the buffer with info he wants to store as keyword.info or keyword.cmd
-    User saves the contents of the buffer to database by calling HelperSave vim cmd or
-    HelperSaveInfo which are aliases to HelperSave(flag).
-    '''
-    #if not hasattr(word, "name"):
-    #    keyword = Keyword(name=word)
+    '''Creates a new keyword with name=word and adds contents from vim buffer
+    as information for the keyword and updates the database.
+    Returns the keyword.'''
     keyword = Keyword(name=word)
     keyword = store.add(keyword)
-    update_keyword_info(store, keyword, buf)
+
+    buf_content = read_vim_buffer(buf, 0)
+    update_info(store, keyword, buf_content)
     return keyword
 
 
-def update_keyword_info(store, keyword, buf):
-    '''Commits to database the contents from helper buffer. Maybe it
-    should detect if changes from original exist.
-    buf  -> a vim buffer'''
-    # read from Vim buffer
-    lines = buf[:]
-    buf_content = "\n".join(lines)
-    # storm stores content to db as unicode
-    buf_content = unicode(buf_content)
-    keyword.info = buf_content
+def update_keyword(store, keyword, buf):
+    '''Reads contents from vim buffer except for the title line and updates
+    the keyword information.
+    '''
+    buf_content = read_vim_buffer(buf, 1)
+    update_info(store, keyword, buf_content)
     #store.find(Keyword, Keyword.name == keyword.name).set(info=buf_content)
     # write to DB file
-    store.commit()
     return keyword
+
+
+def read_vim_buffer(buf, start_line):
+    '''Reads vim buffer as a list of strings and joins them into one string.
+    Returns the string.'''
+    lines = buf[start_line:]
+    buf_content = "\n".join(lines)
+    return buf_content
+
+
+def update_info(store, keyword, content):
+    'Updates the keyword information and commits to database.'
+    ## storm stores content to db as unicode
+    keyword.info = unicode(content)
+    store.commit()
 
 
 def introduction_line(word):
@@ -256,3 +272,18 @@ with :HelperSave.\nIf you don't want to save it, quit with :q!\n\n \
 All these lines can be deleted when adding info.''' % word
 
     return msg_no_keyword
+
+
+def create_vim_list(values):
+    """creates the Vim editor equivalent of python's repr(a_list).
+
+        >>> create_vim_list(['first line', 'second line'])
+        '["first line", "second line"]'
+
+    We need double quotes not single quotes.
+    This result can be fed to vim's eval function to create a list in vim.
+    """
+    values_with_quotes = ('"' + elem + '"' for elem in values)
+    return '[%s]' % ', '.join(values_with_quotes)
+    # as a one liner:
+    #return '[%s]' % ', '.join("\"%s\"" % elem for elem in values)

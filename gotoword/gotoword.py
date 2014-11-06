@@ -89,7 +89,7 @@ logger.debug("Following constants are defined: \n"
              extra={'className': ""}
              )
 
-
+# move to utils.py
 def create_vim_list(values):
     """creates the Vim editor equivalent of python's repr(a_list).
 
@@ -104,7 +104,7 @@ def create_vim_list(values):
     # as a one liner:
     #return '[%s]' % ', '.join("\"%s\"" % elem for elem in values)
 
-
+# move to utils.py
 def strip(s):
     """Used to stringify and then strip a class name accessed using obj.__class__
     so that it is suitable for pretty printing.
@@ -415,11 +415,12 @@ class App(object):
         """
         # bind to app for easier handling
         self.context = context
+        self.test_answer = test_answer
         # state strategy pattern:
         self.state = EntryState()
         self.saving = True
         while self.saving:
-            self.state = self.state.evaluate(self, self.keyword, self.context, test_answer)
+            self.state = self.state.evaluate(self, self.keyword, self.context, self.test_answer)
             if self.state is None:
                 self.saving = False
 
@@ -746,8 +747,8 @@ class VimWrapper(object):
         keyword = utils.find_keyword(STORE, self.parent.word)
 
         if keyword:
-            # get contexts this keyword belongs to (specific to ORM) should be
-            # moved to utils
+            # get contexts this keyword belongs to (specific to ORM); it
+            # should be moved to utils
             contexts_generator = keyword.contexts.values(utils.Context.name)
             contexts = [c for c in contexts_generator]
             # add a title line at the top;
@@ -820,10 +821,16 @@ class EntryState(object):
             return NewKeywordState()
         elif kw and (not context):
             app.kwnotcontext = True
-            # kw exists in db, context was not given by user -> update kw
-            return None
+            # kw exists in db, context was not given by user -> update kw info
+            # to same context, if context exists, or to no context at all
+            return UpdateKeywordState()
+            #return None
         else:
-            return None
+            # so both kw and context are defined: info will be assigned to
+            # other context -> update kw
+            app.kwandcontext = True
+            #return None
+            return UpdateKeywordState()
 
 
 class ReadContextState(object):
@@ -846,11 +853,16 @@ class ReadContextState(object):
         #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
         #answer = vim.eval('user_input')
 
+        # TODO: put it in a while loop, like any prompt should be
+        # eg: while not answer in ('0', '1', '2')
         answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
                 "0. Yes, I will provide a context [0 and press <Enter>]", \
                 "1. No, I won't provide a context [1 and press <Enter>]", \
                 "2. Abort [2 and press <Enter>]" ])
                 """)
+        # TODO: provide another option for 'Yes, I will provide an existing
+        # context'
+
         # inputlist() is blocking the prompt, waiting for a key from user
         # inputlist() returns '0' if no option is chosen or if first option is
         # chosen
@@ -887,12 +899,11 @@ class ReadContextState(object):
             # debug:
             vim.command('echo "\n"')
             vim.command('echomsg "You entered: [\"%s\"]"' % app.answer)
-            return NewContextState()
+            return CheckContextState()
             #return NewKeywordState()
         elif answer.startswith('1') or answer.startswith('n'):
             app.nocontextno = True        # debug
             return NewKeywordState()
-            #return NewContextState()
         #elif answer.startswith('0') or answer.startswith('a'):
         elif answer.startswith('2') or answer.startswith('a'):
             # Abort
@@ -903,7 +914,7 @@ class ReadContextState(object):
             vim.command('echo "None is returned"')
             return None
         else:
-            vim.command('echomsg "Invalid option! Type a number from 1 to 3"')
+            vim.command('echomsg "Invalid option! Type a number from 0 to 2"')
             return None
 
 
@@ -922,7 +933,10 @@ class NewKeywordState(object):
         return None
 
 
-class NewContextState(object):
+class CheckContextState(object):
+    # TODO rename to CreateContextState and create a CheckContextState that
+    # points you to CreateContextState if context name is new, else just
+    # assigns it to keyword
     """Creates a context and stores it to database. It returns a
     NewKeywordState, because we use this class only when user wants to define
     a keyword and a context, so first we define a context then we define a
@@ -930,39 +944,42 @@ class NewContextState(object):
     """
     @database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
-        #global app
         # capture from stdin the context name
         message = "Enter a one word context name: \n"
-        vim.command('call inputsave()')
-        vim.command("let user_input = input('%s')" % message)
-        vim.command('call inputrestore()')
-        answer = vim.eval('user_input')
-        # sanitize it (strip, lowercase, unicode it, etc.)
-        answer = unicode(answer.strip().lower())
+        answer = get_user_input(message, test_answer)
         # debug
         vim.command('echo "\n"')
         vim.command('echomsg "You entered: \'%s\'"' % answer)
-
         # validate it
-        res = STORE.find(utils.Context, utils.Context.name == answer).one()
-        if res:
-            raise RuntimeError("Context '%s' already exists!" % context)
+        context = STORE.find(utils.Context, utils.Context.name == answer).one()
+        if context:
+            # user typed an existing context
+            # TODO: don't raise, output a friendlier message and return to
+            # previous state/the proper state
+            #raise RuntimeError("Context '%s' already exists!" % context)
+            app.context = context
+            return NewKeywordState()
+        else:
+            # user typed a context name that doesn't exist in DB, so create a
+            # new one
+            app.context = answer
+            return CreateContextState()
 
-        context = utils.Context(name=answer)
+
+class CreateContextState(object):
+    """TODO: add description."""
+    @database_operations   # maybe I should remove these for the evaluate fcts
+    def evaluate(self, app, kw, context, test_answer):
+        context = utils.Context(name=context)
         # make it a storm object
         context = STORE.add(context)
 
+        # capture from stdin the short description of the context
         message = "Enter a short description of the context you just defined: \n"
-        # capture the short description from stdin
-        vim.command('call inputsave()')
-        vim.command("let user_input = input('%s')" % message)
-        vim.command('call inputrestore()')
-        answer = vim.eval('user_input')
-        # sanitize it (strip, lowercase, unicode it, etc.)
-        answer = unicode(answer.strip().lower())
+        answer = get_user_input(message, test_answer)
         # debug
         vim.command('echo "\n"')
-        vim.command('echomsg "You entered: [\'%s\']"' % answer)
+        vim.command('echomsg "You entered: \'%s\'"' % answer)
         # add it to the storm object, to the appropriate field
         # TODO: add a 'description' field to utils.Context
         #context.description = answer
@@ -970,6 +987,27 @@ class NewContextState(object):
         app.context = context
         #return None
         return NewKeywordState()
+
+
+class UpdateKeywordState(object):
+    "Updates the information field of a keyword."
+    def evaluate(self, app, kw, context, test_answer):
+        # retrieve context
+        pass
+
+
+def get_user_input(message, test_answer):
+    "Returns the user input from vim, displaying a message at the prompt."
+    if test_answer:
+        answer = unicode(test_answer)
+    else:
+        vim.command('call inputsave()')
+        vim.command("let user_input = input('%s')" % message)
+        vim.command('call inputrestore()')
+        answer = vim.eval('user_input')
+        # sanitize it (strip, lowercase, unicode it, etc.)
+        answer = unicode(answer.strip().lower())
+    return answer
 
 #### MAIN ###
 

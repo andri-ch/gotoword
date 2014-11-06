@@ -1,5 +1,14 @@
 #!/usr/bin/python
 
+"""
+This file contains functional tests for "gotoword" python app.
+It uses pytest python module, not the default unittest, because in python 2.x
+it is more difficult to run and organize functional tests.
+
+From the command line, it should be run like this:
+$: py.test -v ft.py
+"""
+
 # allow relative imports from modules outside of system path, when this module is
 # executed as script:
 #if __name__ == '__main__' and __package__ is None:
@@ -138,12 +147,13 @@ class TestGotoword():
         assert (int(window_nr) != -1)
 
     #@pytest.mark.testit
-    def test_HelperSave_new_keyword_no_context_but_given_when_prompted(self):
+    def test_HSave_new_kword_no_context_but_new_one_given_when_prompted(self):
         ## -------------------------
         # show that 'rgb' doesn't exist in database:
         # call :Helper, input some predefined documentation about the word
         ## -------------------------
-        self.keyword_fixture('rgb', self.buffer_index, self.buffer_name)
+        self.keyword_fixture('new kw no context but given', 'rgb',
+                             self.buffer_index, self.buffer_name)
 
         ## -------------------------
         #  call HelperSave with no context
@@ -160,11 +170,25 @@ class TestGotoword():
         ##
         #self.client.feedkeys('2 \<Enter>')
 
+        time.sleep(0.2)
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
+        time.sleep(0.2)
         assert ('rgb' in all_words)
-        # TODO check that 'rgb' has context it belongs to
-        time.sleep(1)
+        # check that 'rgb' has a context it belongs to
+        word_contexts = self.get_keyword_contexts(self.buffer_index)
+        time.sleep(0.2)
+        assert ('0' in word_contexts)
+        # revert
+        self.client.command('HelperDelete')
+        time.sleep(0.2)
+
+    def test_HS_new_kw_no_context_but_existing_one_given_when_prompted(self):
+        pass
+        # TODO: make HelperSave take a test answer other than 0, make it take
+        # multiple test answers, for each stage (maybe a list or a dict)
+        # it should be an immutable container, to mimic that stages are not
+        # mutable
 
     #@pytest.mark.testit
     def test_HelperDelete_on_current_keyword(self):
@@ -186,7 +210,8 @@ class TestGotoword():
         # which means he wants to provide no context, but save the keyword
         # anyway
         ## -------------------------
-        self.keyword_fixture('rgb', self.buffer_index, self.buffer_name)
+        self.keyword_fixture('new kw no context but not given', 'rgb',
+                             self.buffer_index, self.buffer_name)
         self.client.command('HelperSave "" 1')
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
@@ -202,18 +227,21 @@ class TestGotoword():
         #  call HelperSave with no context and user chooses choice 3
         # which means user cancels :HelperSave, so nothing should happen
         ## -------------------------
-        self.keyword_fixture('rgb', self.buffer_index, self.buffer_name)
+        self.keyword_fixture('new kw no context but cancel', 'rgb',
+                             self.buffer_index, self.buffer_name)
         self.client.command('HelperSave "" 2')
         ## check definition and keyword are not stored to database
         all_words = self.get_all_keywords(self.buffer_index)
         assert ('rgb' not in all_words)
 
-    def test_HelperSave_new_keyword_and_context_given(self):
+    #@pytest.mark.testit
+    def test_HelperSave_new_keyword_and_existing_context_given(self):
         ## -------------------------
         #  call HelperSave with context that exists in database
         ## -------------------------
         # call :Helper on word 'rgb'
-        self.keyword_fixture('rgb', self.buffer_index, self.buffer_name)
+        self.keyword_fixture('new kw and old context given', 'rgb',
+                             self.buffer_index, self.buffer_name)
 
         ## we save the word 'rgb', but we supply a context
         context = "kivy"
@@ -233,7 +261,8 @@ class TestGotoword():
         #  call HelperSave with context that doesn't exist in database
         ## -------------------------
         # call :Helper on word 'rgb'
-        self.keyword_fixture('rgb', self.buffer_index, self.buffer_name)
+        self.keyword_fixture('new kw and context given', 'rgb',
+                             self.buffer_index, self.buffer_name)
 
         ## we save again the word 'rgb', but we supply a context that doesn't
         # exist yet in database
@@ -249,6 +278,35 @@ class TestGotoword():
         self.client.command('HelperDeleteContext %s' % context)
         all_contexts = self.get_all_contexts(self.buffer_index)
         assert (context not in all_contexts)
+
+    @pytest.mark.testit
+    def test_HelperSave_update_info_for_keyword_to_same_context(self):
+        '''test that info belonging to a context is updated (so keyword
+        exists).'''
+        kword = 'rgb'
+        self.keyword_fixture('update_info_for_keyword_with_existing_context',
+                             kword, self.buffer_index, self.buffer_name)
+        self.client.write_buffer("line('$') + 1",
+                                 "test update - add after last line")
+        time.sleep(0.3)
+        self.client.command('HelperSave "" 0')
+        time.sleep(0.1)
+
+        # check info is updated, so first locate it in current document
+        line_nr = self.client.search(kword, flags='w')
+        assert 0 != line_nr
+
+        self.client.command('Helper')
+        time.sleep(0.1)
+        # focus helper buffer, because read_buffer() acts on current buffer
+
+        info = self.client.read_buffer("'$'", buf=self.buffer_index)
+        time.sleep(0.2)       # might be obsolete
+        # debug in Vim
+        #self.client.command('py app.info = "%s"' % info)
+        assert ("test update - add after last line" == info)
+        # delete 'rgb'
+        self.client.command('HelperDelete')
 
     def test_HelperAllContexts(self):
         ## -------------------------
@@ -281,6 +339,8 @@ class TestGotoword():
     def get_cmd_output(self, cmd, buffer_index):
         """Eg:
             get_cmd_output('2', 'HelperAllWords')
+        Returns a string that contains the text from vim buffer and it can be
+        split at newlines to obtain a list of vim lines.
         """
         self.client.command('%s' % cmd)
         return self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
@@ -306,7 +366,7 @@ class TestGotoword():
         """Displays the output of HelperWordContexts vim command."""
         return self.get_cmd_output('HelperWordContexts', buffer_index)
 
-    def keyword_fixture(self, kword, buffer_index, buffer_name):
+    def keyword_fixture(self, fixture_name, kword, buffer_index, buffer_name):
         """
         This function is useful to call :Helper on random words in the test
         document.
@@ -324,7 +384,7 @@ class TestGotoword():
             buffer_name     the Helper_buffer inside Vim editor
         Returns nothing.
         Eg:
-            keyword_fixture('canvas', '2', '~/documents/my_file.txt')
+            keyword_fixture('define canvas', 'canvas', '2', '~/my_file.txt')
         """
 
         # locate it in current document
@@ -360,8 +420,8 @@ class TestGotoword():
         self.client.normal('gg')
         self.client.normal('dG')
         # add a definition for keyword
-        self.client.insert("Functional tests: This is definition for "
-                           "keyword '%s'." % kword)
+        self.client.insert("Test name '%s': This is definition for "
+                           "keyword '%s'." % (fixture_name, kword))
         # exist Insert mode:
         self.client.normal('<ESC>')
 
