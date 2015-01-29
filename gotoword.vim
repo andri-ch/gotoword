@@ -74,7 +74,7 @@ endif
 
 " TODO: check for python 2 or python 3 if it works only on python3.
 
-" prevent vim from loading twice the plugin
+" prevent vim from loading the plugin twice
 if exists("g:gotoword_loaded")
   finish
 endif
@@ -108,6 +108,7 @@ endif
 
 if !exists(":HelperDeleteContext")
   command -nargs=1 HelperDeleteContext call s:Helper_delete_context(<f-args>)
+" Eg. :HelperDeleteContext python
 endif
 
 
@@ -284,31 +285,28 @@ endfunction
 
 
 " MAIN 
-
-" --------------------------------
-" Add our plugin to the path
-" --------------------------------
-python import sys
-python import vim
-python sys.path.append(vim.eval('expand("<sfile>:h")'))
-"python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
-" :help sfile
-
-" DEBUG
-"python print vim.eval('expand("<sfile>:h")') + '/gotoword'
-"python print sys.path
-
-" prevent vim from running the python app if the app is already running
-" remotely (eg. in ipython, etc.)
-if exists("g:gotoword_remote_start")
-  finish
-endif
-
+" When this script is loaded into VIM, the following code is executed:
 python <<EOF
+
+import sys
+import vim
+# --------------------------------
+# Add our plugin to the path
+# --------------------------------
+sys.path.append(vim.eval('expand("<sfile>:h")'))
+#python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
+# :help sfile
+
+# DEBUG
+# python print vim.eval('expand("<sfile>:h")') + '/gotoword'
+# python print sys.path
+
 try:
     from gotoword import gotoword, utils
 except ImportError:
     import gotoword, utils
+
+
 app = gotoword.App()
 app.main()
 EOF

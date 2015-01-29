@@ -20,7 +20,7 @@ import storm
 
 ### Own libraries ###
 #import gotoword
-from utils import Keyword, Context, create_keyword, update_keyword_info
+from utils import Keyword, Context, create_keyword, update_keyword
 from utils import load_keywords_store
 import utils
 
@@ -135,12 +135,12 @@ class TestMain(unittest.TestCase):
         word = create_keyword(self.store, u'testword', buf)
         self.assertTrue(word.info)
 
-    def test_update_keyword_info(self):
+    def test_update_keyword(self):
         kw = Keyword(name=u'test_update_keyword')
         self.store.add(kw)
         self.store.commit()
         buf = ["This is awesome."]     # vim buffer is a list of strings/lines
-        kw = update_keyword_info(self.store, kw, buf)
+        kw = update_keyword(self.store, kw, buf)
         # prepare db for visual inspection
         #func_name = inspect.stack()[0][3]
         #self.copy_database_for_inspection(func_name + ".db")
@@ -198,7 +198,7 @@ if __name__ == '__main__':          # when running as a script
     #runner.run(suite)
 
     ### run tests from this file ###
-    unittest.main()
+    unittest.main(verbosity=2)
     print("Done!")
 else:                                # when it is being imported
     # Realtime initialization, useful in a shell when this file is imported

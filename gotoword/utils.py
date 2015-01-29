@@ -11,7 +11,7 @@ from storm.locals import *
 
 __all__ = ['Keyword', 'Context', 'KeywordContext', 'get_server', 'initialize',
            'load_keywords_store', 'find_keyword', 'create_keyword',
-           'update_keyword_info', 'introduction_line']
+           'update_keyword', 'introduction_line']
 
 
 def __dir__():

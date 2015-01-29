@@ -1,8 +1,10 @@
+# -*- coding: utf-8 -*-
+
 ### System libraries ###
-import os
+import logging
+import logging.handlers
 import os.path
 import sys
-import logging
 
 ### Third party libs ###
 # for database:
@@ -11,8 +13,8 @@ from storm.locals import Store
 ### import vim python library ###
 try:
     import vim
-    # the vim module contains everything we need to interact with vim
-    # editor from python, but only when python is used inside vim.
+    # the vim module contains everything we need to interact with Vim
+    # editor from python, but only when python is used inside Vim.
     # Eg. you can't import vim in ipython like a normal module
     # More info here:
     # http://vimdoc.sourceforge.net/htmldoc/if_pyth.html#Python
@@ -21,48 +23,96 @@ except ImportError:
     print("Either quit or use some variables and functions")
     #sys.exit()
 
+
 def set_up_logging(default_level):
     ### DEBUG -> is the lowest level ###
+    #logging.basicConfig(level=default_level)
+    # .basicConfig adds a stream handler by default
+    msg_format = ("%(asctime)s [  %(levelname)s  ] %(className)s.%(funcName)s "
+                  "- %(message)s")
+    #msg_format = ("%(asctime)s [  %(levelname)s  ] .%(funcName)s "
+    #              "- %(message)s")
+    formatter = logging.Formatter(msg_format)
 
-    msg_format = '[  %(levelname)s  ] %(className)s.%(funcName)s - %(message)s'
-    logging.basicConfig(format=msg_format, level=default_level)
-    logger = logging.getLogger('Main')
+    file_handler = logging.FileHandler(filename="gotoword.log",
+                                       mode="w")
+    file_handler.setFormatter(formatter)
 
-    ##  SET UP A HANDLER THAT LOGS TO FILE ###
-    # Handlers send the log records (created by loggers) to the appropriate
-    # destination: a console, a file, over the internet, by email, etc.
-    filename = None
-    # script that is run from vim editor has one log filename, while script
-    # that is run from a python interpreter external to vim editor has
-    # another filename
-    try:
-        import vim
-        filename = "gotoword_vim.log"
-    except ImportError:
-        # TODO: do I need this branch? This script won't be executed outside
-        # editor
-        # this branch is executed when this script is run outside vim editor
-        filename = "gotoword_ipython.log"
-        ### SET UP A CONSOLE HANDLER ###
-        console_handler = logging.StreamHandler()       # stream -> sys.stdout
-        # set level per handler
-        console_handler.setLevel(logging.INFO)
-        logger.addHandler(console_handler)
-        # this handler outputs debug messages although level is info
+    IP = 'localhost'
+    PORT = logging.handlers.DEFAULT_TCP_LOGGING_PORT
+    socket_handler = logging.handlers.SocketHandler(IP, PORT)
+    # socket_handler is used to send logs to a socket server in the functional
+    # tests file -> might crash if not testing?!
+    sock_msg_format = "%(message)s"
+    socket_formatter = logging.Formatter(sock_msg_format)
+    socket_handler.setFormatter(socket_formatter)
 
-    file_handler = logging.FileHandler(filename=filename, mode='w')
+    logger = logging.getLogger('app')
+    logger.setLevel(default_level)
     logger.addHandler(file_handler)
+    logger.addHandler(socket_handler)
     return logger
 
+
+def log(fn):
+    """Adapted the decorator for extracting the name of the function even if
+    the function is decorated.
+    """
+    decorators = get_decorators(fn)
+    fn = decorators[-1]
+
+    def wrapper(*args, **kwargs):
+        logger.debug('About to run %s with args: %s and kwargs: %s' % (fn.__name__, args[1:], kwargs),
+                     extra={'className': getattr(fn, 'im_class', "")})
+        # getattr() is needed because not all functions decorated by log()
+        # are bounded to a class instance.
+        out = fn(*args, **kwargs)
+        logger.debug('Done running %s; return value: %s' % (fn.__name__, out),
+                     extra={'className': getattr(fn, 'im_class', "")})
+        return out
+    return wrapper
+
+
+def get_decorators(function):
+    """Get decorators wrapping a function:
+    http://schinckel.net/2012/01/20/get-decorators-wrapping-a-function/
+
+    Recursive function that returns a list of functions, last element L[-1]
+    is the original function.
+    """
+    # all python functions have an attr. 'func_closure' which is None or a
+    # tuple;
+    # If func_closure is None, it means we are not wrapping any other
+    # functions -> it's the original function that's being wrapped.
+    if not function.func_closure:
+        return [function]
+    decorators = []
+    # Otherwise, we want to collect all of the recursive results for every
+    # closure we have.
+    for closure in function.func_closure:
+        decorators.extend(get_decorators(closure.cell_contents))
+    return [function] + decorators
+
+
 logger = set_up_logging(logging.DEBUG)
+#logger = set_up_logging(logging.INFO)
+logger.debug("SCRIPT STARTED", extra={'className': ""})
+#logger.debug("logger parameters: \n"
+#             "\t\thandlers: %s \n"
+#             "\t\tSocketHandler socket %s \n" %
+#             (logger.handlers, type(logger.handlers[1].sock)),
+#             extra={'className': ""}
+#             )
+#logger.info("emit_counter: %s" % logger.handlers[1].emit_counter, extra={'className': ""})
 
 
 VIM_FOLDER = os.path.expanduser('~/.vim')
-# os.path.expanduser turns '~' into an absolute path, because os.path.abspath can't!
 PLUGINS_FOLDER = 'andrei_plugins'
 # PLUGINS_FOLDER can be any of "plugin", "autoload", etc.
+
 # TODO: decide in which plugin folder is more appropriate to install this
 # plugin and you might get rid of all these constants or put them in a dict
+
 PLUGIN_NAME = 'gotoword'
 PYTHON_PACKAGE = 'gotoword'
 
@@ -72,13 +122,15 @@ SCRIPT = os.path.join(PLUGIN_PATH, 'gotoword.vim')
 ### Own libraries ###
 # NOTICE
 # the python path when these lines are executed is the path of the currently
-# active buffer (vim.current.buffer) in which this code is executed
+# active buffer (vim.current.buffer)
 # So, to import our own libs, we have to add them to python path.
-SOURCE_DIR = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE)
+SOURCE_DIR = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME,
+                          PYTHON_PACKAGE)
 sys.path.insert(1, SOURCE_DIR)
 # Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
 import utils               # should be replaced by import utils
-
+# TODO: Can sys.path.insert() be avoided if we have a proper __init__.py file in the
+# package?
 
 # plugin's database that holds all the keywords and their info
 DB_NAME = 'keywords.db'
@@ -105,8 +157,8 @@ logger.debug("Following constants are defined: \n"
 
 # move to utils.py
 def strip(s):
-    """Used to stringify and then strip a class name accessed using obj.__class__
-    so that it is suitable for pretty printing.
+    """Used to stringify and then strip a class name accessed using
+    obj.__class__ so that it is suitable for pretty printing.
     This function will be used like this::
 
         >>> print("this is class %s " % strip(obj.__class__))
@@ -158,39 +210,46 @@ def toggle_activate(f):
         vim.command("buffer! %s" % user_buf_nr)
     return wrapper_activate
 
-
-def toggle_readonly(f):
-    """decorator used to set buffer options inside vim editor"""
-    def wrapper_readonly(obj, *args, **kwargs):
-        # if called repeatedly, remove readonly flag set by previous calls
-        vim.command("set noreadonly")
-        # the format of the log message below takes into account that this is a
-        # wrapper only for __setitem__() methods that are found in a mapping
-        # object; I probably should reformat this message
-        logger.debug("obj: %s, index: %s , value: %s " % (obj, args[0], args[1]),
-                     extra={'className': ''}
-                     )
-        res = f(obj, *args, **kwargs)
-        vim.command("set readonly")
-        # by setting buffer readonly, we want user to prevent from saving it
-        # on harddisk with :w cmd, instead we want user to update the
-        # database with HelperSave or HelperUpdate vim cmd
-        return res
-    return wrapper_readonly
+# TODO: Check if the user can :w to our help buffer
+#def toggle_readonly(f):
+#    """decorator used to set buffer options inside vim editor"""
+#    def wrapper_readonly(obj, *args, **kwargs):
+#        # if called repeatedly, remove readonly flag set by previous calls
+#        vim.command("set noreadonly")
+#        # the format of the log message below takes into account that this is a
+#        # wrapper only for __setitem__() methods that are found in a mapping
+#        # object; I probably should reformat this message
+#        logger.debug("obj: %s, index: %s , value: %s " % (obj, args[0], args[1]),
+#                     extra={'className': ''}
+#                     )
+#        res = f(obj, *args, **kwargs)
+#        vim.command("set readonly")
+#        # by setting buffer readonly, we want user to prevent from saving it
+#        # on harddisk with :w cmd, instead we want user to update the
+#        # database with HelperSave or HelperUpdate vim cmd
+#        return res
+#    return wrapper_readonly
 
 
 def database_operations(f):
     """decorator used to open and close a database connection before each
-    call to the wrapped function."""
+    call to the wrapped function.
+    The purpose of this decorator is to close the DB between operations
+    performend on DB with possibly large time gaps.
+    The user takes a lot of time on what definition to add to a kwd, so DB should
+    be closed during that time.
+    """
     # pass decorated func's name, description to wrapper
     #@functools.wraps
     def wrapper_operations(*args, **kwargs):
         # reopen database connection
         STORE._connection = STORE.get_database().connect()
+        logger.debug("store is open", extra={'className': ''})
         # call decorated function
         res = f(*args, **kwargs)
         # close database connection
         STORE.close()
+        logger.debug("store is closed", extra={'className': ''})
         return res
     return wrapper_operations
 
@@ -205,36 +264,38 @@ class App(object):
     """
     This is the main plugin app. Run App.main() method to launch it.
     """
-    # create a help_buffer that will hold info retrieved from database, etc. but
-    # prevent vim to create buffer in current working dir, by setting an explicit
-    # path;
+    # create a help_buffer that will hold info retrieved from database, etc.
+    # but prevent vim to create buffer in current working dir, by setting an
+    # explicit path;
     help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME,
                                     PLUGIN_NAME + '_buffer')
-    # help_buffer is created on the fly, in memory, it doesn't exist on disk, but we
-    # specify a full path as its name
+    # help_buffer is created on the fly, in memory, it doesn't exist on disk,
+    # but we specify a full path as its name
 
     def __init__(self, vim_wrapper=None):
         self.vim_wrapper = vim_wrapper
         self.word = None
         self.keyword = None
         # the current keyword which will be displayed in helper buffer
-        logger.debug("gotoword started from vim pid: %s and parent's: %s" %
-                    (os.getpid(), os.getppid()), extra={'className': strip(self.__class__)})
+        logger.debug("plugin started from Vim with pid: %s" %
+                     os.getpid(), extra={'className': strip(self.__class__)})
 
+    #@log
     def main(self):
         """This is the main entry point of this script."""
-        logger.debug("", extra={'className': strip(self.__class__)})
         self.vim_wrapper = VimWrapper(app=self)
         # detect if run inside vim editor and if yes, setup help_buffer
         #if not isinstance(self.vim_wrapper.vim, VimServer):
         #    self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
         self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
 
+    @log
     @database_operations
     def helper_save(self, context, test_answer):
         """
         this function, if called twice on same keyword(first edit, then an update)
         should know that it doesn't need to create another keyword, just to update
+        TODO: write a proper doc string
         """
         # bind to app for easier handling
         self.context = context
@@ -321,6 +382,7 @@ class App(object):
         ## TODO: context.name? this will be an error if no context is defined whatsoever
         #print("Keyword and its definition were saved in %s context." % context.name)
 
+    @log
     @database_operations
     def helper_delete(self, keyword, context=None):
         """
@@ -349,6 +411,7 @@ class App(object):
         else:
             print("Can't delete a word and its definition if it's not in the database.")
 
+    @log
     @database_operations
     def helper_delete_context(self, context):
         "Deletes context from database."
@@ -361,12 +424,12 @@ class App(object):
         else:
             print("Can't delete a context if it's not in the database.")
 
+    @log
     @database_operations
     def helper_all_words(self):
         """
         List all keywords from database into help_buffer.
         """
-        logger.debug("", extra={'className': strip(self.__class__)})
         # select only the keyword names
         result = STORE.execute("SELECT name FROM keyword;")
         # dump from generator into a list
@@ -387,17 +450,21 @@ class App(object):
         >>> names
         [u'canvas', u'color', u'line']
         '''
-        self.vim_wrapper.open_window(self.help_buffer_name)
-        logger.debug("names: %s" % names, extra={'className': strip(self.__class__)})
+        self.vim_wrapper.open_window(self.help_buffer_name, vim)
+        logger.debug("names: %s" % names,
+                     extra={'className': strip(self.__class__)})
         self.vim_wrapper.help_buffer[:] = names
 
+    @log
     @database_operations
     def helper_all_contexts(self):
         """
         List all contexts from database into help_buffer.
         """
-        logger.debug("", extra={'className': strip(self.__class__)})
-        # select only the keyword names
+        # TODO: this is the same as helper_all_words, create one that is
+        # used by both
+
+        # select only the context names
         result = STORE.execute("SELECT name FROM context;")
         # dump from generator into a list
         l = result.get_all()
@@ -417,10 +484,12 @@ class App(object):
         >>> names
         [u'canvas', u'color', u'line']
         '''
-        self.vim_wrapper.open_window(self.help_buffer_name)
-        logger.debug("names: %s" % names, extra={'className': strip(self.__class__)})
+        self.vim_wrapper.open_window(self.help_buffer_name, vim)
+        logger.debug("names: %s" % names,
+                     extra={'className': strip(self.__class__)})
         self.vim_wrapper.help_buffer[:] = names
 
+    @log
     @database_operations
     def helper_context_words(self, context):
         """
@@ -440,9 +509,11 @@ class App(object):
         self.vim_wrapper.help_buffer[0:0] = [
             "The following keywords have a meaning (definition) in '%s' "
             "context:" % storm_context.name]
+        # write data to buffer
         self.vim_wrapper.help_buffer[1:] = words
         return words
 
+    @log
     @database_operations
     def helper_word_contexts(self):
         """
@@ -480,6 +551,7 @@ class VimWrapper(object):
         self.parent = app
         self.help_buffer = None
 
+    #@log
     def setup_help_buffer(self, buffer_name):
         """
         It does an init job for a vim buffer by setting buffer options.
@@ -506,7 +578,11 @@ class VimWrapper(object):
         self.buffer_nr = int(buffer_nr)
         #self.help_buffer = HelperBuffer(buffer_name, self)
         self.help_buffer = vim.buffers[self.buffer_nr]
-        logger.debug("help_buffer: %s" % self.help_buffer, extra={'className': strip(self.__class__)})
+        logger.debug("help_buffer is: %s with index: %s" %
+                     (self.help_buffer, self.buffer_nr),
+                     extra={'className': strip(self.__class__)})
+
+        logger.info("emit_counter: %s" % logger.handlers[1].emit_counter, extra={'className': ""})
 
         # activate the buffer so we can set some buffer options
         vim.command("buffer! %s" % self.buffer_nr)
@@ -522,30 +598,35 @@ class VimWrapper(object):
         vim.command("buffer! %s" % user_buf_nr)
 
     @staticmethod
-    def open_window(buffer_name):
+    #@log
+    def open_window(buffer_name, editor=None):
         """
         Opens a window inside vim editor with an existing buffer whose name is
-        the value of buffer name.
+        buffer name.
+        editor - the editor is the global var. vim, but it is given as arg. so
+                 that you can import this fct. in other modules, as well, such
+                 as the testing module.
         """
         # save current global value of 'switchbuf' in order to restore it later
         # and add 'useopen' value to it
-        vim.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+        editor.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
 
         # open help buffer
         # 'sbuffer' replaces 'split' because we want to use same buffer window if
         # it exists because sbuffer checks the switchbuf option
-        vim.command("sbuffer %s" % buffer_name)
+        editor.command("sbuffer %s" % buffer_name)
 
         # restore switchbuf to its default value in order not to affect other plugin
         # functionality:
-        vim.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
+        editor.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
 
         # prevent vim from focusing the helper window created on top, by
         # focusing the last one used (the window used by user before calling this
         # plugin).
         # CTRL-W p   Go to previous (last accessed) window.
-        vim.command('call feedkeys("\<C-w>p")')
+        editor.command('call feedkeys("\<C-w>p")')
 
+    @log
     @database_operations
     def update_buffer(self, word):
         """
@@ -562,8 +643,7 @@ class VimWrapper(object):
         word = unicode(word)
         # make it case-insensitive
         self.parent.word = word.lower()
-        logger.debug("before opening window", extra={'className': strip(self.__class__)})
-        self.open_window(self.parent.help_buffer_name)
+        self.open_window(self.parent.help_buffer_name, vim)
 
         # look for keyword in DB
         #keyword = utils.find_keyword(self.vim_wrapper.parent.store, word)
@@ -574,6 +654,9 @@ class VimWrapper(object):
             # should be moved to utils
             contexts_generator = keyword.contexts.values(utils.Context.name)
             contexts = [c for c in contexts_generator]
+            logger.debug("word: %s keyword: %s contexts: %s" %
+                         (word, keyword, contexts),
+                         extra={'className': strip(self.__class__)})
             # add a title line at the top;
             # TODO: is the title line removed when kw is updated?
             self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
@@ -582,6 +665,9 @@ class VimWrapper(object):
             self.help_buffer[1:] = keyword.info.splitlines()
         else:
             # keyword doesn't exist, prepare buffer to be filled with user content
+            logger.debug("word: %s keyword: %s" %
+                         (word, keyword),
+                         extra={'className': strip(self.__class__)})
 
             # write to buffer the small help text
             self.help_buffer[:] = utils.introduction_line(word).splitlines()
@@ -591,11 +677,6 @@ class VimWrapper(object):
             keyword = None
         return keyword
 
-    def close(self):
-        """Sends the quit cmd to the vim server."""
-        # should call vim server's terminate() method.
-        pass
-
 
 class EntryState(object):
     """Makes an initial evaluation of keyword & context and decides which is
@@ -604,6 +685,7 @@ class EntryState(object):
     def __init__(self):
         pass
 
+    @log
     @database_operations
     def evaluate(self, app, kw, context, test_answer):
         # kw is None if no keyword exists in database
@@ -617,6 +699,7 @@ class EntryState(object):
             app.kw = kw
             app.new_context0 = context
             app.bol = (not kw) and (not context)
+            logger.debug("not kw and not context", extra={'className': strip(self.__class__)})
             return ReadContextState()
         elif (not kw) and context:
             # debug flags:
@@ -640,12 +723,14 @@ class EntryState(object):
             # transform app.context which is just a string into a Storm object
             # from DB
             app.context = ctx
+            logger.debug("not kw and context", extra={'className': strip(self.__class__)})
             # continue with creating and saving a keyword
             return NewKeywordState()
         elif kw and (not context):
             app.kwnotcontext = True
             # kw exists in db, context was not given by user -> update kw info
             # to same context, if context exists, or to no context at all
+            logger.debug("kw and not context", extra={'className': strip(self.__class__)})
             return UpdateKeywordState()
             #return None
         else:
@@ -653,11 +738,14 @@ class EntryState(object):
             # other context -> update kw
             app.kwandcontext = True
             #return None
+            logger.debug("kw and context", extra={'className': strip(self.__class__)})
             return UpdateKeywordState()
 
 
 class ReadContextState(object):
     """Prompts user to supply context."""
+    @log
+    @database_operations
     def evaluate(self, app, kw, context, test_answer):
         # we keep this code in case we want to drop inputlist() for reading
         # user input
@@ -743,16 +831,21 @@ class ReadContextState(object):
 
 class NewKeywordState(object):
     "Creates a keyword and stores it to database."
+    @log
     @database_operations
     def evaluate(self, app, kw, context, test_answer):
         # global app
         app.keyword = utils.create_keyword(STORE, app.word,
                                            app.vim_wrapper.help_buffer)
+        logger.debug("kw: %s, context: %s, test_answer: %s" %
+                     (app.keyword, context, test_answer),
+                     extra={'className': strip(self.__class__)})
         # add keyword definition to context
         app.keyword.contexts.add(context)
         STORE.commit()
-        vim.command('echomsg "keyword %s saved into context %s"' %
-                    (app.keyword.name, context))
+        logger.debug('echomsg "keyword %s saved into context %s"' %
+                     (app.keyword.name, context),
+                     extra={'className': strip(self.__class__)})
         return None
 
 
@@ -765,16 +858,18 @@ class CheckContextState(object):
     a keyword and a context, so first we define a context then we define a
     keyword and we add it to the context.
     """
+    @log
     @database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
         # capture from stdin the context name
         message = "Enter a one word context name: \n"
         answer = get_user_input(message, test_answer)
-        # debug
-        vim.command('echo "\n"')
-        vim.command('echomsg "You entered: \'%s\'"' % answer)
         # validate it
         context = STORE.find(utils.Context, utils.Context.name == answer).one()
+        # debug
+        logger.debug("kw: %s, context: %s, test_answer: %s, answer: %s" %
+                     (app.keyword, context, test_answer, answer),
+                     extra={'className': strip(self.__class__)})
         if context:
             # user typed an existing context
             # TODO: don't raise, output a friendlier message and return to
@@ -791,6 +886,7 @@ class CheckContextState(object):
 
 class CreateContextState(object):
     """TODO: add description."""
+    @log
     @database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
         context = utils.Context(name=context)
@@ -801,8 +897,9 @@ class CreateContextState(object):
         message = "Enter a short description of the context you just defined: \n"
         answer = get_user_input(message, test_answer)
         # debug
-        vim.command('echo "\n"')
-        vim.command('echomsg "You entered: \'%s\'"' % answer)
+        logger.debug("kw: %s, context: %s, test_answer: %s, answer: %s" %
+                     (app.keyword, context, test_answer, answer),
+                     extra={'className': strip(self.__class__)})
         # add it to the storm object, to the appropriate field
         # TODO: add a 'description' field to utils.Context
         #context.description = answer
@@ -814,6 +911,8 @@ class CreateContextState(object):
 
 class UpdateKeywordState(object):
     "Updates the information field of a keyword."
+    @log
+    @database_operations
     def evaluate(self, app, kw, context, test_answer):
         # retrieve context
         pass

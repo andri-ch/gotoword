@@ -28,26 +28,22 @@ import os
 import time
 import logging
 import logging.handlers
-#from logging.handlers import DEFAULT_TCP_LOGGING_PORT
 import inspect
 import threading
-#import multiprocessing
-
+import asyncore
+import unittest
+unittest.defaultTestLoader.sortTestMethodsUsing = None
 
 # third party modules
-import pytest
+#import pytest
 from vimrunner import Server
-from tl.testing.thread import ThreadJoiner
 
 # gotoword modules
-#import gotoword
 from gotoword import VimWrapper
 from gotoword import STORE
 import utils
-#from logserver import myTCPServer, myFileRequestHandler
-#import SocketServer
-#from logserver import LogRecordSocketReceiver, LogRecordStreamHandler
-import logserver
+#import logserver
+import asyncorelog
 
 
 SERVER = 'gotoword'
@@ -60,40 +56,32 @@ SCRIPT = 'gotoword.vim'
 HELP_BUFFER = 'gotoword_buffer'
 #HELP_BUFFER = '~/.vim/andrei_plugins/gotoword/helper_buffer'
 
-# setup logging
-#msg_format = '[  %(levelname)s  ] %(funcName)s - %(message)s'
+
+### SETUP LOGGING ###
 #logging.basicConfig(level=logging.DEBUG)
 
-
+# root logger
 logger = logging.getLogger('')
 logger.setLevel(logging.DEBUG)
 # delete the default stream handler
 #logger.handlers = []
 
-msg_format = "%(asctime)s %(name)s %(message)s"
+msg_format = "%(asctime)s %(name)s   %(className)s.%(funcName)s - %(message)s"
+#msg_format = '[  %(levelname)s  ] %(funcName)s - %(message)s'
 formatter = logging.Formatter(msg_format)
 
+# store logs from application under test in a file:
 file_handler = logging.FileHandler(filename='ft.log', mode='w')
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
-#IP = 'localhost'
-#PORT = logging.handlers.DEFAULT_TCP_LOGGING_PORT
-#socket_handler = logging.handlers.SocketHandler(IP, PORT)
-#logger.addHandler(socket_handler)
-
-
-# set up a logger for this module, logs all messages by sending them to the root
+# setup a logger for this module, logs all messages by sending them to the root
 # logger using a SocketHandler
 #logger_ft = logging.getLogger('func_tests')
-#logger_ft.setLevel(logging.DEBUG)
-#logger_ft.handlers = []
 #IP = 'localhost'
 #PORT = logging.handlers.DEFAULT_TCP_LOGGING_PORT
 #socket_handler = logging.handlers.SocketHandler(IP, PORT)
-#socket_handler.setFormatter(formatter)
 #logger_ft.addHandler(socket_handler)
-#logger.addHandler(socket_handler)
 
 #qh = QueueHandler(formatter)
 #logger.addHandler(qh)
@@ -108,186 +96,149 @@ def setup_log_server():
 
     # instantiate the server cls, passing it the server’s address and the
     # request handler class:
-    tcpserver = logserver.LogRecordSocketReceiver()
-    #tcpserver.allow_reuse_address = True
-    #tcpserver.logname = 'log_srvr'
+    #logserver.LogRecordSocketReceiver.allow_reuse_address = True
+    #tcpserver = logserver.LogRecordSocketReceiver()
+    #tcpserver = logserver.ForkingLogRecordSocketReceiver()
+    tcpserver = asyncorelog.EchoServer()
     print('About to start TCP server...')
     return tcpserver
 
 
-def serve(log_server):
-    try:
-        log_server.serve_until_stopped()
-    finally:
-        log_server.abort = 1
-        log_server.server_close()
-        log_server.shutdown()
+#def serve(log_server):
+#    try:
+#        log_server.serve_until_stopped()
+#    finally:
+#        log_server.abort = 1
+#        # .server_close is not in the documentation -> but exists in source
+#        # files:
+#        log_server.server_close()
+#        log_server.shutdown()
 
-
-#log_server = setup_log_server()
-#log_server.abort = 1
-#thr_log_server = threading.Thread(target=log_server.serve_until_stopped)
-#thr_log_server.daemon = True        # don't hang on exit
-#thr_log_server.start()
 
 log_server = setup_log_server()
-#with ThreadJoiner(0.2):
-thr_log_server = threading.Thread(target=serve, args=(log_server,))
-##thr_log_server = multiprocessing.Process(target=serve, args=(log_server,))
-thr_log_server.daemon = True        # don't hang on exit
+#thr_log_server = threading.Thread(target=serve, args=(log_server,))
+#thr_log_server.daemon = True
+#thr_log_server.start()
+#logger.debug("len handlers 1: %s" % len(logger.handlers))
+
+#thr_log_server = threading.Thread(target=log_server.serve_until_stopped)
+##thr_log_server.daemon = True
+#thr_log_server.start()
+
+#thr_log_server = threading.Thread(target=log_server.serve_forever)
+#thr_log_server.start()
+
+thr_log_server = threading.Thread(target=asyncore.loop)
 thr_log_server.start()
-logger.debug("len handlers 1: %s" % len(logger.handlers))
-#logger.debug("thread id: %s" % thr_log_server.ident)
-
-#thr_log_server = None
 
 
-# fixtures can be used by multiple classes:
-@pytest.fixture(scope="class")
-def server_setup(request):
-    # start logging
-    #log_server = setup_log_server()
-    #thr_log_server = threading.Thread(target=log_server.serve_until_stopped)
-    #thr_log_server.daemon = True        # don't hang on exit
-    #thr_log_server.start()
-
-    # initialize a Vim editor server
-    request.cls.vim = Server(name=SERVER)
-    # request.cls will become self when a test class is instantiated, so
-    # attributes will be added to self.
-    request.cls.client = request.cls.vim.start_in_other_terminal()
-    #time.sleep(1)
-    request.cls.client.add_plugin(PLUGIN_PATH, SCRIPT)
-        # edit test file
-    request.cls.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
-                                         TEST_FILE))
-    buffers = request.cls.client.command('ls!')
-    # buffers is similar to:
-    # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
-    #  2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
-    if not HELP_BUFFER in buffers:
-        raise RuntimeError("initialization failed, no help buffer exists.")
-
-    # get buffer index and name:
-    buffers = buffers.split("\n")
-    buffers = [buf.strip(u" \t") for buf in buffers]
-    #buffers = map(str.strip, buffers)
-    buf = [buf_info for buf_info in buffers if HELP_BUFFER in buf_info]
-    # buf is a one element list, so
-    buf = buf.pop()
-    # >>> buf
-    # '2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
-
-    # make buffer_index persistent across test cases -> make it a class
-    # variable, not an instance variable, because new instances are created
-    # for each test case:
-    request.cls.buffer_index = buf[0]
-    #TestGotoword.buffer_index = buf[0]
-    request.cls.buffer_name = buf.split()[2]
-    if request.cls.buffer_name is '':
-            raise RuntimeError("buffer name is empty, so no buffer exists")
-    # setup up logging:
-    request.cls.logger = logging.getLogger('')
-    #logger.debug("len handlers in fixture: %s" % len(logger.handlers))
-
-
-@pytest.mark.usefixtures("server_setup")
-@pytest.mark.incremental
-class TestGotoword():
+class TestGotoword(unittest.TestCase):
+#class TestGotoword(ThreadAwareTestCase):
     @classmethod
     def setUpClass(cls):
-        #global thr_log_server
-        #cls.log_server = setup_log_server()
-        #cls.thr_log_server = threading.Thread(target=serve, args=(cls.log_server,))
-        #thr_log_server = multiprocessing.Process(target=serve, args=(log_server,))
-        #cls.thr_log_server.daemon = True        # don't hang on exit
+        #log_server = setup_log_server()
+        #cls.thr_log_server = threading.Thread(target=log_server.serve_until_stopped)
+        #cls.thr_log_server.daemon = True
         #cls.thr_log_server.start()
-        #thr_log_server = cls.thr_log_server
-        #cls.logger.debug("len handlers: %s" % len(logger.handlers))
+
+        #cls.log_server = log_server
+
+        # initialize a Vim editor server
+        cls.vim = Server(name=SERVER)
+        # cls will become self when a test class is instantiated, so
+        # attributes will be added to self.
+        cls.client = cls.vim.start_in_other_terminal()
+        cls.client.add_plugin(PLUGIN_PATH, SCRIPT)
+            # edit test file
+        cls.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
+                                     TEST_FILE))
+        buffers = cls.client.command('ls!')
+        # buffers is similar to:
+        # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
+        #  2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
+        if not HELP_BUFFER in buffers:
+            raise RuntimeError("initialization failed, no help buffer exists.")
+
+        # get buffer index and name:
+        buffers = buffers.split("\n")
+        buffers = [buf.strip(u" \t") for buf in buffers]
+        #buffers = map(str.strip, buffers)
+        buf = [buf_info for buf_info in buffers if HELP_BUFFER in buf_info]
+        # buf is a one element list, so
+        buf = buf.pop()
+        # >>> buf
+        # '2u#a   "/home/andrei/.vim/andrei_plugins/gotoword/gotoword_buffer" line 1'
+
+        # make buffer_index persistent across test cases -> make it a class
+        # variable, not an instance variable, because new instances are created
+        # for each test case:
+        cls.buffer_index = buf[0]
+        #TestGotoword.buffer_index = buf[0]
+        cls.buffer_name = buf.split()[2]
+        if cls.buffer_name is '':
+                raise RuntimeError("buffer name is empty, so no buffer exists")
+        # setup up logging:
+        cls.logger = logging.getLogger('')
 
         #logger_ft = logging.getLogger('func_tests')
         #IP = 'localhost'
         #PORT = logging.handlers.DEFAULT_TCP_LOGGING_PORT
         #socket_handler = logging.handlers.SocketHandler(IP, PORT)
-        #logger.addHandler(socket_handler)
-        #self.logger =.logger
-
-        #log_server = setup_log_server()
-        #cls.log_server = log_server
-        #thr_log_server = threading.Thread(target=log_server.serve_until_stopped)
-        #thr_log_server.daemon = True
-        #thr_log_server.start()
-
-        #cls.log_server = setup_log_server()
-        #thr_log_server = threading.Thread(target=cls.serve)
-        #thr_log_server.start()
-        #thr_log_server = threading.Thread(target=serve, args=(log_server,))
-        #thr_log_server.start()
-
+        #logger_ft.addHandler(socket_handler)
+        #self.logger_ft = logger_ft
+        #asyncore.loop()
         pass
 
     def setUp(self):
-        #self.logger = logging.getLogger('func_tests')
-        # tests runner complains about
-        # AttributeError: TestGotoword instance has no attribute .logger'
-        #thr_log_server.daemon = True
         #self.log_server = setup_log_server()
-        #thr_log_server = threading.Thread(target=self.serve)
+        #self.logger_ft = logging.getLogger('func_tests')
+        # tests runner complains about
+        # AttributeError: TestGotoword instance has no attribute 'logger_ft'
+        #self.thr_log_server = self.run_in_thread(self.log_server.serve_forever)
+        #thr_log_server = threading.Thread(target=log_server.serve_forever)
+        #self.thr_log_server = self.run_in_thread(log_server.serve_until_stopped)
+        #self.thr_log_server = threading.Thread(target=self.log_server.serve_until_stopped)
+        #self.thr_log_server = threading.Thread(target=self.log_server.serve_forever)
+        #self.thr_log_server.daemon = True
         #self.thr_log_server.start()
-        #self.log_server = logserver.LogRecordSocketReceiver()
-
-        #thr_log_server = threading.Thread(target=self.serve)
-        #thr_log_server.daemon = True
-        #thr_log_server.start()
-        #self.logger.debug("thread id %s" % thr_log_server.ident)
-
+        #self.log_server = log_server
         pass
 
-    #def serve(self):
-    #    try:
-    #        self.log_server.serve_until_stopped()
-    #    finally:
-    #        self.log_server.abort = 1
-    #        self.log_server.server_close()
-
     def tearDown(self):
-        self.logger.debug("len handlers 2: %s" % len(self.logger.handlers))
-        logger.debug("len handlers 3: %s" % len(logger.handlers))
+        #kill_waiting_thread()
+        #self.thr_log_server.join(1)
+        #self.log_server.abort = 1
         #self.log_server.shutdown()
         #self.log_server.server_close()
-        #log_server.abort = 1
+        #self.log_server.socket.shutdown(1)
+        #self.log_server.socket.close()
+        #time.sleep(1)
+        #raise
         pass
 
     @classmethod
     def tearDownClass(cls):
-        # shutdown server
-        #cls.log_server.abort = 1
         #cls.log_server.shutdown()
-        # close the socket:
-        #cls.log_server.server_close()
+        #log_server.abort = 1
+        #log_server.server_close()
+        #log_server.shutdown()
+        #log_server.server_close()
+        log_server.close()
         pass
 
-    @pytest.mark.testit
-    #@logger
-    def test_test_file_is_opened(self):
+    def test_001_test_file_is_opened(self):
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         "Test a vim buffer is opened with the test file."
-        self.logger.debug("Executing function %s" % inspect.stack()[0][3])
-        #self.logger.debug("len handlers: %s" % len(self.logger.handlers))
-        #for h in self.logger.handlers:
-        #    self.logger.debug("handler: %s" % h)
-        #self.logger.debug("is_alive: %s" % thr_log_server.is_alive())
-        #self.logger.debug('server addr: %s' % thr_log_server.server_address)
         #self.assertTrue(TEST_FILE in self.client.command('ls'))
         assert (TEST_FILE in self.client.command('ls'))
 
-    @pytest.mark.testit
-    #@logger
-    def test_all_Helper_commands_exist(self):
+    def test_002_all_Helper_commands_exist(self):
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         """
         tests if :Helper vim command opens the description of the word under cursor.
         """
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
-        #self.logger.debug("len handlers: %s" % len(self.logger.handlers))
         # List the user-defined commands that start with Helper
         out = self.client.command('command Helper')
         # out is something like:
@@ -314,12 +265,10 @@ class TestGotoword():
         assert ('HelperContextWords' in cmds)
         assert ('HelperWordContexts' in cmds)
 
-    @pytest.mark.testit
-    #@logger
-    def test_command_Helper_on_existing_keyword(self):
+    def test_003_command_Helper_on_existing_keyword(self):
         func_name = inspect.stack()[0][3]
-        self.logger.debug("Executing function %s " % func_name)
-        #self.logger.debug("len handlers: %s" % len(self.logger.handlers))
+        self.logger.debug("Executing function %s " % func_name,
+                          extra={'className': ""})
         # call Vim function search("canvas", 'w') to search
         # top-bottom-top
         # for a keyword we know it exists and has a definition in database
@@ -333,7 +282,8 @@ class TestGotoword():
         time.sleep(1)
         # check that the correct help text is displayed in gotoword buffer
         #info = self.client.eval('getbufline(%s, 1, "$")' % self.buffer_index)
-        info = self.client.eval('getbufline(%s, 1, "$")' % TestGotoword.buffer_index)
+        info = self.client.eval('getbufline(%s, 1, "$")' %
+                                TestGotoword.buffer_index)
         # >>> info
         # 'Define a canvas section in which you can add Graphics instruct...'
         assert ('Define a canvas section' in info)
@@ -344,9 +294,10 @@ class TestGotoword():
         #log.debug('window_nr: %s' % window_nr)
         assert (int(window_nr) != -1)
 
-    @pytest.mark.testit
-    def test_HSave_new_kword_no_context_but_new_one_given_when_prompted(self):
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+    #@unittest.skip("")
+    def test_004_HSave_new_kwd_no_context_but_new_one_given_when_prompted(self):
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         ## -------------------------
         # show that 'rgb' doesn't exist in database:
         # call :Helper, input some predefined documentation about the word
@@ -369,44 +320,48 @@ class TestGotoword():
         ##
         #self.client.feedkeys('2 \<Enter>')
 
-        time.sleep(0.2)
+        time.sleep(0.5)
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
-        self.logger.debug("all_words: %s" % all_words)
+        self.logger.debug("all_words: %s" % all_words,
+                          extra={'className': ""})
         time.sleep(0.2)
         assert ('rgb' in all_words)
         # check that 'rgb' has a context it belongs to
         word_contexts = self.get_keyword_contexts(self.buffer_index)
-        self.logger.debug("word_contexts: %s" % word_contexts)
-        time.sleep(0.2)
+        self.logger.debug("word_contexts: %s" % word_contexts,
+                          extra={'className': ""})
+        time.sleep(0.5)
         assert ('0' in word_contexts)
         # revert
         self.client.command('HelperDelete')
+        # delete the context given too
+        self.client.command('HelperDeleteContext 0')
         time.sleep(0.2)
 
-    def test_HS_new_kw_no_context_but_existing_one_given_when_prompted(self):
+    #@unittest.skip("")
+    def test_005_HS_new_kw_no_context_but_existing_one_given_when_prompted(self):
         pass
         # TODO: make HelperSave take a test answer other than 0, make it take
         # multiple test answers, for each stage (maybe a list or a dict)
         # it should be an immutable container, to mimic that stages are not
         # mutable
 
-    #@pytest.mark.testit
-    def test_HelperDelete_on_current_keyword(self):
+    #@unittest.skip("")
+    def test_006_HelperDelete_on_current_keyword(self):
         ## -------------------------
         #  test HelperDelete
         ## -------------------------
         ## delete 'rgb' word saved previuosly
         # HelperDelete deletes the keyword on which Helper was called
         # which in this case is 'rgb'
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
         self.client.command('HelperDelete')
         # check 'rgb' is deleted
         all_words = self.get_all_keywords(self.buffer_index)
         assert ('rgb' not in all_words)
 
-    #@pytest.mark.testit
-    def test_HelperSave_new_keyword_no_context_not_given_when_prompted(self):
+    #@unittest.skip("")
+    def test_007_HelperSave_new_keyword_no_context_not_given_when_prompted(self):
         # THIS TEST WILL FAIL BECAUSE SAME TEST ANSWER FROM PREVIOUS Test still
         # exists
 
@@ -415,27 +370,32 @@ class TestGotoword():
         # which means he wants to provide no context, but save the keyword
         # anyway
         ## -------------------------
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         self.keyword_fixture('new kw no context but not given', 'rgb',
                              self.buffer_index, self.buffer_name)
         self.client.command('HelperSave "" 1')
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
-        self.logger.debug("all_words: %s " % all_words)
+        self.logger.debug("all_words: %s " % all_words,
+                          extra={'className': ""})
         assert ('rgb' in all_words)
         # check 'rgb' is saved with no context
         word_contexts = self.get_keyword_contexts(self.buffer_index)
-        self.logger.debug("word_contexts: %s" % word_contexts)
+        self.logger.debug("word_contexts: %s" % word_contexts,
+                          extra={'className': ""})
         assert ("doesn't belong" in word_contexts)
         # ok, now delete it to revert database
         self.client.command('HelperDelete')
 
-    def test_HelperSave_new_keyword_no_context_but_we_cancel_saving(self):
+    #@unittest.skip("")
+    def test_008_HelperSave_new_keyword_no_context_but_we_cancel_saving(self):
         ## -------------------------
         #  call HelperSave with no context and user chooses choice 3
         # which means user cancels :HelperSave, so nothing should happen
         ## -------------------------
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         self.keyword_fixture('new kw no context but cancel', 'rgb',
                              self.buffer_index, self.buffer_name)
         self.client.command('HelperSave "" 2')
@@ -443,12 +403,13 @@ class TestGotoword():
         all_words = self.get_all_keywords(self.buffer_index)
         assert ('rgb' not in all_words)
 
-    #@pytest.mark.testit
-    def test_HelperSave_new_keyword_and_existing_context_given(self):
+    #@unittest.skip("")
+    def test_009_HelperSave_new_keyword_and_existing_context_given(self):
         ## -------------------------
         #  call HelperSave with context that exists in database
         ## -------------------------
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         # call :Helper on word 'rgb'
         self.keyword_fixture('new kw and old context given', 'rgb',
                              self.buffer_index, self.buffer_name)
@@ -466,13 +427,15 @@ class TestGotoword():
         # delete 'rgb'
         self.client.command('HelperDelete')
 
-    def test_HelperSave_new_keyword_and_new_context_given(self):
+    #@unittest.skip("")
+    def test_010_HelperSave_new_keyword_and_new_context_given(self):
         ## -------------------------
         #  call HelperSave with context that doesn't exist in database
         ## -------------------------
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         # call :Helper on word 'rgb'
-        self.keyword_fixture('new kw and context given', 'rgb',
+        self.keyword_fixture('new kw and new context given', 'rgb',
                              self.buffer_index, self.buffer_name)
 
         ## we save again the word 'rgb', but we supply a context that doesn't
@@ -485,16 +448,20 @@ class TestGotoword():
 
         # delete 'rgb'
         self.client.command('HelperDelete')
+        all_words = self.get_all_keywords(self.buffer_index)
+        assert ('rgb' not in all_words)
+
         # delete context
         self.client.command('HelperDeleteContext %s' % context)
         all_contexts = self.get_all_contexts(self.buffer_index)
         assert (context not in all_contexts)
 
-    #@pytest.mark.testit
-    def test_HelperSave_update_info_for_keyword_to_same_context(self):
+    #@unittest.skip("")
+    def test_011_HelperSave_update_info_for_keyword_to_same_context(self):
         '''test that info belonging to a context is updated (so keyword
         exists).'''
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         kword = 'rgb'
         self.keyword_fixture('update_info_for_keyword_with_existing_context',
                              kword, self.buffer_index, self.buffer_name)
@@ -504,6 +471,7 @@ class TestGotoword():
         self.client.command('HelperSave "" 0')
         time.sleep(0.1)
 
+        #self.client.command('Helper')
         # check info is updated, so first locate it in current document
         line_nr = self.client.search(kword, flags='w')
         assert 0 != line_nr
@@ -520,11 +488,13 @@ class TestGotoword():
         # delete 'rgb'
         self.client.command('HelperDelete')
 
-    def test_HelperAllContexts(self):
+    #@unittest.skip("")
+    def test_012_HelperAllContexts(self):
         ## -------------------------
         ## test HelperAllContexts
         ## -------------------------
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         all_contexts = self.get_all_contexts(self.buffer_index)
         # test at least one context exists
         # TODO: contexts should be retrieved from DB and test for equality
@@ -532,19 +502,19 @@ class TestGotoword():
         assert ('python' in all_contexts)
         time.sleep(0.5)
 
-    @pytest.mark.testit
-    def test_HelperContextWords(self):
+    #@unittest.skip("")
+    def test_013_HelperContextWords(self):
         ## -------------------------
         ## test 'HelperContextWords'
         ## -------------------------
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3])
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
         # get keywords that are defined in the 'python' context using the
-        # plugin we are testing
+        # plugin we are testing in this test suite.
         context = "python"
         ctx_words = self.get_context_keywords(self.buffer_index, context)
         # get context from DB as a Storm object and count keywords straight
         # from DB table
-        #ctx = utils.Context.find_context(gotoword.STORE, unicode(context))
         ctx = utils.Context.find_context(STORE, unicode(context))
         # compare the two numbers
         assert (ctx.keywords.count() == len(ctx_words.split("\n")) - 1)
@@ -588,7 +558,7 @@ class TestGotoword():
         document.
 
         It simulates the user flow inside Vim editor regarding a word that
-        doesn't exist yet in the plugin database:
+        exists or doesn't exist yet in the plugin database:
             - how he locates a word he wants more info about
             - how he calls :Helper  cmd on that word
             - the Helper buffer opens but it contains the default lines for
@@ -601,9 +571,11 @@ class TestGotoword():
         Returns nothing.
         Eg:
             keyword_fixture('define canvas', 'canvas', '2', '~/my_file.txt')
+
+        Most of the times, after this function a call to :HelperSave command
+        is needed.
         """
 
-        self.logger.debug("Running fixture for %s " % kword)
         # locate it in current document
         line_nr = self.client.search(kword, flags='w')
         assert 0 != line_nr
@@ -627,7 +599,6 @@ class TestGotoword():
         # all functions and classes from gotoword expect to have 'vim' python
         # module binding to Vim editor as a global variable, but we substitute
         # it with a partially compatible Vim server client
-        #gotoword.vim = self.client
         # focus window:
         VimWrapper.open_window(buffer_name, self.client)
         ###
@@ -644,5 +615,12 @@ class TestGotoword():
         self.client.normal('<ESC>')
 
 
-#if __name__ == '__main__':
-#    unittest.main()
+if __name__ == '__main__':
+#    with ThreadJoiner(1):
+    suite = unittest.makeSuite(TestGotoword)
+    runner = unittest.TextTestRunner(stream=sys.stdout, verbosity=2,
+                                     failfast=True)
+    runner.run(suite)
+#        kill_waiting_thread()
+
+    #unittest.main()
