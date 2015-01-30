@@ -374,7 +374,11 @@ class TestGotoword(unittest.TestCase):
                           extra={'className': ""})
         self.keyword_fixture('new kw no context but not given', 'rgb',
                              self.buffer_index, self.buffer_name)
+        # make sure that Vim has caught up with the stage/state of this test
+        self.delay("test007-fixture")
+
         self.client.command('HelperSave "" 1')
+        self.delay("test007-after helpersave", 0.25)
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
         self.logger.debug("all_words: %s " % all_words,
@@ -417,7 +421,7 @@ class TestGotoword(unittest.TestCase):
         ## we save the word 'rgb', but we supply a context
         context = "kivy"
         self.client.command('HelperSave %s' % context)
-        time.sleep(0.5)
+        self.delay("test009-after helpersave", 0.5)
         # Can be deleted?
         # we don't have a prompt for now
         #self.client.type("\<CR>")
@@ -442,7 +446,7 @@ class TestGotoword(unittest.TestCase):
         # exist yet in database
         context = "newcontext"
         self.client.command('HelperSave %s' % context)
-        time.sleep(0.5)
+        self.delay("test010-after helpersave", 0.5)
         ctx_words = self.get_context_keywords(self.buffer_index, context)
         assert ('rgb' in ctx_words)
 
@@ -613,6 +617,23 @@ class TestGotoword(unittest.TestCase):
                            "keyword '%s'." % (fixture_name, kword))
         # exist Insert mode:
         self.client.normal('<ESC>')
+
+    def delay(self, expected_value, timeout=1):
+        """
+        It makes sure that Vim has caught up with the stage/state of a test
+        by setting a Vim flag and waiting timeout seconds before it checks
+        its flag; it checks and waits timeout seconds to a maximum of 5 times.
+
+        client.command returns its output as unicode because the tests are
+        using vimrunner module.
+        """
+        self.client.command('py app.test_flag = "%s"' % expected_value)
+        i = 0
+        while not self.client.command("py print(app.test_flag)") == unicode(expected_value):
+            time.sleep(timeout)
+            i += 1
+            if i == 5:
+                raise RuntimeError("timeout of %s expired" % expected_value)
 
 
 if __name__ == '__main__':
