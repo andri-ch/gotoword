@@ -274,4 +274,4 @@ else:                                # when it is being imported
     for word in words_generator:
         print(word)
 
-    # user at shell is required to call store.close() at the end.
+    print("user at shell is required to call store.close() at the end.")
