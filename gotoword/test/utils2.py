@@ -1,8 +1,8 @@
 # -*- coding: utf8 -*-
 
-from standalone import models
 
-# Read more:
+from standalone import models
+# Read more about models:
 # https://docs.djangoproject.com/en/1.7/topics/db/models/
 
 
@@ -75,3 +75,119 @@ class Data(models.StandaloneModel):
 
     def __unicode__(self):
         return self.keyword.name + self.context.name
+
+
+def initialize(database):
+    '''This should be run only once, to create the db, maybe when the script
+    is installed. It can populate the db if needed, or the install script
+    copy the default db.
+
+    database - check the docs for load_keywords_store function.'''
+    pass
+
+
+def load_keywords_store(database):
+    '''Creates a connection to the database and loads all keywords.
+    Probably, it should first identify the context, and load the keywords
+    from that context, not all keywords in db.
+    This function should be ran when the plugin is loaded.
+
+    database - a string of the form SCHEME:PATH where:
+    scheme - sqlite, postgresql, mysql, etc.
+    path - it can be an absolute path.
+    eg. '/home/user1/data.db' or 'data.db' for file in current dir.
+    '''
+    pass
+
+
+def find_keyword(store, word):
+    '''Searches the database for the word.
+    store - any model class, like Keyword, Context, etc.
+    word - any string
+    Eg.:
+        find_keyword(Keyword, "canvas")
+    '''
+    keyword = Keyword.objects.filter(name=word)
+    return keyword
+
+
+#    Workflow:
+#    with cursor on the word that will become a keyword,
+#    user calls vim function Helper, which opens an empty helper_buffer or
+#    empties the one already open.
+#    User edits the buffer with info he wants to store as keyword.info or keyword.cmd
+#    User saves the contents of the buffer to database by calling HelperSave vim cmd or
+#    HelperSaveInfo which are aliases to HelperSave(flag).
+#    '''
+#    #if not hasattr(word, "name"):
+#    #    keyword = Keyword(name=word)
+
+# TODO: unit tests for all these functions
+def create_keyword(store, word, buf):
+    '''Creates a new keyword with name=word and adds contents from vim buffer
+    as information for the keyword and updates the database.
+    Returns the keyword.'''
+    keyword = Keyword(name=word)
+    keyword.save()
+    #context = Context
+    #buf_content = read_vim_buffer(buf, 0)
+    #update_info(store, keyword, buf_content)
+    return keyword
+
+
+def update_keyword(store, keyword, buf):
+    '''Reads contents from vim buffer except for the title line and updates
+    the keyword's info (personal note), not info_public.
+    '''
+    buf_content = read_vim_buffer(buf, 1)
+    update_info(store, keyword, buf_content)
+    #store.find(Keyword, Keyword.name == keyword.name).set(info=buf_content)
+    # write to DB file
+    return keyword
+
+
+def read_vim_buffer(buf, start_line):
+    '''Reads vim buffer as a list of strings and joins them into one string.
+    Returns the string.'''
+    lines = buf[start_line:]
+    buf_content = "\n".join(lines)
+    return buf_content
+
+
+def update_info(keyword, context, content):
+    'Updates the keyword information and commits to database.'
+    data = keyword.data_set.get(keyword=keyword, context=context)
+    data.info = content
+    data.save()
+    # maybe content replaced with info, and info_public added
+
+
+def introduction_line(word):
+    '''Constructs a text message.
+    It could use an argument to decide which message to return.'''
+
+    msg_no_keyword = '''The keyword "%s" doesn't exist in the database. Would \
+you like to add info about it?\nEdit text with \
+usual vim commands, but save it to this plugin's database, for future use, \
+with :HelperSave.\nIf you don't want to save it, quit with :q!\n\n \
+All these lines can be deleted when adding info.''' % word
+
+    return msg_no_keyword
+
+
+def create_vim_list(values):
+    """creates the Vim editor's equivalent of python's repr(a_list).
+
+        >>> create_vim_list(['first line', 'second line'])
+        '["first line", "second line"]'
+
+    values - a list of strings
+    We need double quotes not single quotes to create a Vim list.
+    Returns a string that is a properly written Vim list of strings.
+    This result can be fed to vim's eval function to create a list in vim.
+    """
+
+    values_with_quotes = ('"' + elem + '"' for elem in values)
+    return '[%s]' % ', '.join(values_with_quotes)
+    # as a one liner:
+    #return '[%s]' % ', '.join("\"%s\"" % elem for elem in values)

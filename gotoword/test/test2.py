@@ -14,9 +14,12 @@ import unittest
 #import gotoword
 #from utils import create_keyword, update_keyword
 #from utils import load_keywords_store
-#import utils
+database_name = 'test.db'
+from settings import setup
+setup(db=database_name)
 
-from standalone.conf import settings
+import django
+#from standalone.conf import settings
 from django.core.management import call_command
 
 
@@ -34,30 +37,30 @@ from django.core.management import call_command
 
 #if not options.database:
 #    parser.error("You must specify the database name")
-
-database_name = 'test.db'
-# fetch the settings and cache them for later use
-settings = settings(
-    DATABASES={
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            #'NAME': 'db.sqlite3',
-            #'NAME': options.database,
-            'NAME': database_name,
-        },
-    },
-    MIDDLEWARE_CLASSES=(
-        'django.middleware.common.CommonMiddleware',
-    ),
-)
+#
+#database_name = 'test.db'
+## fetch the settings and cache them for later use
+#settings = settings(
+#    DATABASES={
+#        'default': {
+#            'ENGINE': 'django.db.backends.sqlite3',
+#            #'NAME': 'db.sqlite3',
+#            #'NAME': options.database,
+#            'NAME': database_name,
+#        },
+#    },
+#    MIDDLEWARE_CLASSES=(
+#        'django.middleware.common.CommonMiddleware',
+#    ),
+#)
 
 ##### Andrei stuff
 # for standalone scripts:
 # according to http://django.readthedocs.org/en/latest/releases/1.7.html#standalone-scripts
 # you need to use this after settings.configure() which is done by settings()
 # above
-import django
-django.setup()
+#import django
+#django.setup()
 #####
 
 from utils2 import Keyword, Context, Data
@@ -121,6 +124,30 @@ class TestMain(unittest.TestCase):
         # create some contexts
         for c in contexts:
             Context.objects.create(name=c, description=contexts[c])
+
+    def tearDown(self):
+        # copy database resulted after running one test with name:
+        #test_name = 'test_create_keyword_add_info_from_buffer'
+        #test_name = 'test_update_keyword_info'
+        #test_name = 'test_context_is_unique'
+        #test_name = 'test_keyword_is_unique'
+
+        ## a TestCase instance will have ._testMethodName() which shows the
+        ## name of the test case (one/test unit)
+        #if self.__dict__['_testMethodName'] == test_name:
+        #    self.copy_database_for_inspection(test_name + '.db')
+
+        Keyword.objects.all().delete()
+        Context.objects.all().delete()
+        Data.objects.all().delete()
+        pass
+        #self.store.close()
+
+        # get rid of database after every test
+        #try:
+        #    os.remove(self.database_name)
+        #except OSError:
+        #    print("there's no such file: %s" % self.database_name)
 
     def test_database_is_populated(self):
         l = Keyword.objects.all()
@@ -196,30 +223,6 @@ class TestMain(unittest.TestCase):
     def test_find_keyword(self):
         kw = Keyword.objects.filter(name="canvas")
         self.assertEqual(u'canvas', kw.values()[0]['name'])
-
-    def tearDown(self):
-        # copy database resulted after running one test with name:
-        #test_name = 'test_create_keyword_add_info_from_buffer'
-        #test_name = 'test_update_keyword_info'
-        #test_name = 'test_context_is_unique'
-        #test_name = 'test_keyword_is_unique'
-
-        ## a TestCase instance will have ._testMethodName() which shows the
-        ## name of the test case (one/test unit)
-        #if self.__dict__['_testMethodName'] == test_name:
-        #    self.copy_database_for_inspection(test_name + '.db')
-
-        Keyword.objects.all().delete()
-        Context.objects.all().delete()
-        Data.objects.all().delete()
-        pass
-        #self.store.close()
-
-        # get rid of database after every test
-        #try:
-        #    os.remove(self.database_name)
-        #except OSError:
-        #    print("there's no such file: %s" % self.database_name)
 
     def copy_database_for_inspection(self, test_name):
         '''Dump a copy of the database for inspection with other tools.'''

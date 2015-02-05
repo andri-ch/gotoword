@@ -8,7 +8,7 @@ import sys
 
 ### Third party libs ###
 # for database:
-from storm.locals import Store
+#from storm.locals import Store
 
 ### import vim python library ###
 try:
@@ -106,6 +106,7 @@ logger.debug("SCRIPT STARTED", extra={'className': ""})
 #logger.info("emit_counter: %s" % logger.handlers[1].emit_counter, extra={'className': ""})
 
 
+# Get rid of so many variables
 VIM_FOLDER = os.path.expanduser('~/.vim')
 PLUGINS_FOLDER = 'andrei_plugins'
 # PLUGINS_FOLDER can be any of "plugin", "autoload", etc.
@@ -128,17 +129,15 @@ SOURCE_DIR = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME,
                           PYTHON_PACKAGE)
 sys.path.insert(1, SOURCE_DIR)
 # Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
-import utils               # should be replaced by import utils
+
+# plugin's database that holds all the keywords and their info:
+DATABASE = 'keywords.db'
+
+from settings import setup
+setup(DATABASE)
+import utils2 as utils
 # TODO: Can sys.path.insert() be avoided if we have a proper __init__.py file in the
 # package?
-
-# plugin's database that holds all the keywords and their info
-DB_NAME = 'keywords.db'
-DATABASE = utils.create_database('sqlite:' + os.path.join(VIM_FOLDER,
-                                 PLUGINS_FOLDER, PLUGIN_NAME, DB_NAME))
-# Eg: DATABASE = 'sqlite:/home/user/.vim/user_plugins/gotoword/keywords.db'
-STORE = Store(DATABASE)
-# store is a cursor to database wrapped by storm
 
 logger.debug("Following constants are defined: \n"
              "\t\t VIM_FOLDER: %s \n"
@@ -243,12 +242,12 @@ def database_operations(f):
     #@functools.wraps
     def wrapper_operations(*args, **kwargs):
         # reopen database connection
-        STORE._connection = STORE.get_database().connect()
+        #STORE._connection = STORE.get_database().connect()
         logger.debug("store is open", extra={'className': ''})
         # call decorated function
         res = f(*args, **kwargs)
         # close database connection
-        STORE.close()
+        #STORE.close()
         logger.debug("store is closed", extra={'className': ''})
         return res
     return wrapper_operations
@@ -290,7 +289,7 @@ class App(object):
         self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
 
     @log
-    @database_operations
+    #@database_operations
     def helper_save(self, context, test_answer):
         """
         this function, if called twice on same keyword(first edit, then an update)
@@ -383,7 +382,7 @@ class App(object):
         #print("Keyword and its definition were saved in %s context." % context.name)
 
     @log
-    @database_operations
+    #@database_operations
     def helper_delete(self, keyword, context=None):
         """
         this function deletes from DB the keyword whose content in help_buffer
@@ -412,7 +411,7 @@ class App(object):
             print("Can't delete a word and its definition if it's not in the database.")
 
     @log
-    @database_operations
+    #@database_operations
     def helper_delete_context(self, context):
         "Deletes context from database."
         context = utils.Context.find_context(STORE, context)
@@ -425,7 +424,7 @@ class App(object):
             print("Can't delete a context if it's not in the database.")
 
     @log
-    @database_operations
+    #@database_operations
     def helper_all_words(self):
         """
         List all keywords from database into help_buffer.
@@ -456,7 +455,7 @@ class App(object):
         self.vim_wrapper.help_buffer[:] = names
 
     @log
-    @database_operations
+    #@database_operations
     def helper_all_contexts(self):
         """
         List all contexts from database into help_buffer.
@@ -490,7 +489,7 @@ class App(object):
         self.vim_wrapper.help_buffer[:] = names
 
     @log
-    @database_operations
+    #@database_operations
     def helper_context_words(self, context):
         """
         Displays all keywords that have a definition belonging to this
@@ -514,7 +513,7 @@ class App(object):
         return words
 
     @log
-    @database_operations
+    #@database_operations
     def helper_word_contexts(self):
         """
         It is used for testing, it should not be available to the user.
@@ -627,7 +626,7 @@ class VimWrapper(object):
         editor.command('call feedkeys("\<C-w>p")')
 
     @log
-    @database_operations
+    #@database_operations
     def update_buffer(self, word):
         """
         Updates an existing buffer with information about a
@@ -686,7 +685,7 @@ class EntryState(object):
         pass
 
     @log
-    @database_operations
+    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
         # kw is None if no keyword exists in database
         if (not kw) and (not context):
@@ -745,7 +744,7 @@ class EntryState(object):
 class ReadContextState(object):
     """Prompts user to supply context."""
     @log
-    @database_operations
+    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
         # we keep this code in case we want to drop inputlist() for reading
         # user input
@@ -832,7 +831,7 @@ class ReadContextState(object):
 class NewKeywordState(object):
     "Creates a keyword and stores it to database."
     @log
-    @database_operations
+    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
         # global app
         app.keyword = utils.create_keyword(STORE, app.word,
@@ -859,7 +858,7 @@ class CheckContextState(object):
     keyword and we add it to the context.
     """
     @log
-    @database_operations   # maybe I should remove these for the evaluate fcts
+    #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
         # capture from stdin the context name
         message = "Enter a one word context name: \n"
@@ -887,7 +886,7 @@ class CheckContextState(object):
 class CreateContextState(object):
     """TODO: add description."""
     @log
-    @database_operations   # maybe I should remove these for the evaluate fcts
+    #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
         context = utils.Context(name=context)
         # make it a storm object
@@ -912,7 +911,7 @@ class CreateContextState(object):
 class UpdateKeywordState(object):
     "Updates the information field of a keyword."
     @log
-    @database_operations
+    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
         # retrieve context
         pass
