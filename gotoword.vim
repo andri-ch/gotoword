@@ -302,9 +302,13 @@ sys.path.append(vim.eval('expand("<sfile>:h")'))
 # python print sys.path
 
 try:
-    from gotoword import gotoword, utils
+    #from gotoword import gotoword, utils
+    from gotoword import gotoword
+    from gotoword import utils2 as utils
 except ImportError:
-    import gotoword, utils
+    #import gotoword, utils
+    import gotoword
+    import utils2 as utils
 
 
 app = gotoword.App()

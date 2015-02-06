@@ -301,7 +301,7 @@ else:                                # when it is being imported
 
     python = Context(name="python", description="programming langugage")
     python.save()
-    django = Context.objects.create(name="django", description="web framework")
+    django_ctx = Context.objects.create(name="django", description="web framework")
 
     color = Keyword.objects.create(name="color")
     # add definition of color in kivy context:
@@ -321,4 +321,26 @@ else:                                # when it is being imported
     canvas_python.save()
 
     test = Keyword.objects.create(name="test")
-    # add an empty context
+
+    # add the default (primary) context
+#    default_context = Context.objects.create(
+#        name="default", description="Context used for keywords that have " +
+#        "only one definition, no matter the context. By default, unless " +
+#        "specified, all keywords will have the first definition assigned " +
+#        "to this context.")
+    default_context = Context.objects.create(
+        name="default", description="Context used by default for the main " +
+        "definition of a word.")
+    test_default_context = Data(keyword=test, context=default_context)
+    test_default_context.info = "test info"
+    test_default_context.save()
+
+    # delete test keyword and its Data relationship
+    test.delete()
+
+    # select only the keyword names
+    all_keywords = [kwd.name for kwd in Keyword.objects.all()]
+
+    # Display all keywords that have a definition belonging to "kivy" context:
+    context_kwds = [kwd.name for kwd in kivy.keyword_set.all()]
+

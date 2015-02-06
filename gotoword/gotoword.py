@@ -403,8 +403,9 @@ class App(object):
             kw_name = keyword.name
             # TODO: kw_name exists only for the print msg, but can be replaced by
             # keyword.name which is still in the namespace, right?
-            STORE.remove(keyword)
-            STORE.commit()
+            keyword.delete()
+#            STORE.remove(keyword)
+#            STORE.commit()
             print("Keyword %s and its definition was removed from database" %
                   kw_name)
         else:
@@ -414,11 +415,12 @@ class App(object):
     #@database_operations
     def helper_delete_context(self, context):
         "Deletes context from database."
-        context = utils.Context.find_context(STORE, context)
+        context = utils.Context.objects.get(name=context)
         if context:
             ctx_name = context.name
-            STORE.remove(context)
-            STORE.commit()
+            context.delete()
+            #STORE.remove(context)
+            #STORE.commit()
             print("Context %s was removed from database" % ctx_name)
         else:
             print("Can't delete a context if it's not in the database.")
@@ -430,19 +432,13 @@ class App(object):
         List all keywords from database into help_buffer.
         """
         # select only the keyword names
-        result = STORE.execute("SELECT name FROM keyword;")
+        names = [kwd.name for kwd in utils.Keyword.objects.all()]
+        #result = STORE.execute("SELECT name FROM keyword;")
         # dump from generator into a list
-        l = result.get_all()
+        #l = result.get_all()
         '''
-        Example:
-        >>> l
-        [(u'line',), (u'color',), (u'canvas',)]
-        '''
-        # the above is a list of two tuples, we create a list of strings
-        names = [t[0] for t in l]
-        '''
-        >>> names
-        [u'line', u'color', u'canvas']
+        >>> result
+        [u'line', u'canvas', u'color']
         '''
         names.sort()
         '''
@@ -464,25 +460,9 @@ class App(object):
         # used by both
 
         # select only the context names
-        result = STORE.execute("SELECT name FROM context;")
-        # dump from generator into a list
-        l = result.get_all()
-        '''
-        Example:
-        >>> l
-        [(u'python',), (u'django',), (u'java',)]
-        '''
-        # the above is a list of two tuples, we create a list of strings
-        names = [t[0] for t in l]
-        '''
-        >>> names
-        [u'line', u'color', u'canvas']
-        '''
+        names = [ctx.name for ctx in utils.Context.objects.all()]
         names.sort()
-        '''
-        >>> names
-        [u'canvas', u'color', u'line']
-        '''
+
         self.vim_wrapper.open_window(self.help_buffer_name, vim)
         logger.debug("names: %s" % names,
                      extra={'className': strip(self.__class__)})
@@ -497,17 +477,18 @@ class App(object):
         context - a string
         Returns a list of words.
         """
-        # locate context into database and retrieve it as a Storm ORM object
-        storm_context = utils.Context.find_context(STORE, context)
-        words_generator = storm_context.keywords.values(utils.Keyword.name)
-        words = [w for w in words_generator]
+
+        # locate context into DB and retrieve it as a Context object
+        context_obj = utils.Context.objects.get(name=context)
+        words = [kwd.name for kwd in context_obj.keyword_set.all()]
         words.sort()
+
         # TODO: the following can be split into a template, the above is the
         # view
         # add a title on the first line
         self.vim_wrapper.help_buffer[0:0] = [
             "The following keywords have a meaning (definition) in '%s' "
-            "context:" % storm_context.name]
+            "context:" % context_obj.name]
         # write data to buffer
         self.vim_wrapper.help_buffer[1:] = words
         return words
@@ -521,8 +502,7 @@ class App(object):
         """
         contexts = None
         if self.keyword:
-            contexts_generat = self.keyword.contexts.values(utils.Context.name)
-            contexts = [c for c in contexts_generat]
+            contexts = [ctx.name for ctx in self.keyword.contexts.all()]
             contexts.sort()
             self._display_word_contexts(self.keyword, contexts)
 
@@ -534,6 +514,7 @@ class App(object):
                 "contexts:" % kw.name]
             self.vim_wrapper.help_buffer[1:] = contexts
         else:
+            # this branch is not useful since django orm
             self.vim_wrapper.help_buffer[:] = [
                 "The keyword '%s' has information that doesn't belong to any "
                 "context" % kw.name]
@@ -646,13 +627,13 @@ class VimWrapper(object):
 
         # look for keyword in DB
         #keyword = utils.find_keyword(self.vim_wrapper.parent.store, word)
-        keyword = utils.find_keyword(STORE, self.parent.word)
+        keyword = utils.find_keyword(self.parent.word)
 
         if keyword:
             # get contexts this keyword belongs to (specific to ORM); it
             # should be moved to utils
-            contexts_generator = keyword.contexts.values(utils.Context.name)
-            contexts = [c for c in contexts_generator]
+            contexts = [ctx.name for ctx in keyword.contexts.objects.all()]
+            contexts.sort()
             logger.debug("word: %s keyword: %s contexts: %s" %
                          (word, keyword, contexts),
                          extra={'className': strip(self.__class__)})
@@ -709,16 +690,16 @@ class EntryState(object):
             # case when kw doesn't exist in DB and context was given by user;
             # context was supplied by user to save keyword in that context;
             # check if it exists in the database (if it is not a new one)
-            ctx = utils.Context.find_context(STORE, context)
+            ctx = utils.Context.objects.get(name=context)
             # if context not in DB, ctx will be None, create a new context
             if not ctx:
                 # TODO: prompt user that context doesn't exist and must be
                 # created; if yes:
                 # save it to DB
                 app.new_context2 = True
-                ctx = utils.Context(name=context)
-                STORE.add(ctx)
-                STORE.commit()
+                ctx = utils.Context.create(name=context)
+#                STORE.add(ctx)
+#                STORE.commit()
             # transform app.context which is just a string into a Storm object
             # from DB
             app.context = ctx
@@ -834,14 +815,14 @@ class NewKeywordState(object):
     #@database_operations
     def evaluate(self, app, kw, context, test_answer):
         # global app
-        app.keyword = utils.create_keyword(STORE, app.word,
+        app.keyword = utils.create_keyword(app.word, context,
                                            app.vim_wrapper.help_buffer)
         logger.debug("kw: %s, context: %s, test_answer: %s" %
                      (app.keyword, context, test_answer),
                      extra={'className': strip(self.__class__)})
         # add keyword definition to context
-        app.keyword.contexts.add(context)
-        STORE.commit()
+        #app.keyword.contexts.add(context)
+        #STORE.commit()
         logger.debug('echomsg "keyword %s saved into context %s"' %
                      (app.keyword.name, context),
                      extra={'className': strip(self.__class__)})
@@ -864,7 +845,8 @@ class CheckContextState(object):
         message = "Enter a one word context name: \n"
         answer = get_user_input(message, test_answer)
         # validate it
-        context = STORE.find(utils.Context, utils.Context.name == answer).one()
+        #context = STORE.find(utils.Context, utils.Context.name == answer).one()
+        context = utils.Context.objects.get(name=answer)
         # debug
         logger.debug("kw: %s, context: %s, test_answer: %s, answer: %s" %
                      (app.keyword, context, test_answer, answer),
@@ -888,9 +870,9 @@ class CreateContextState(object):
     @log
     #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
-        context = utils.Context(name=context)
+        context = utils.Context.create(name=context)
         # make it a storm object
-        context = STORE.add(context)
+#        context = STORE.add(context)
 
         # capture from stdin the short description of the context
         message = "Enter a short description of the context you just defined: \n"
@@ -902,7 +884,7 @@ class CreateContextState(object):
         # add it to the storm object, to the appropriate field
         # TODO: add a 'description' field to utils.Context
         #context.description = answer
-        STORE.commit()
+#        STORE.commit()
         app.context = context
         #return None
         return NewKeywordState()

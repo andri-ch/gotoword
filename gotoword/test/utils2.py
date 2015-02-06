@@ -100,7 +100,7 @@ def load_keywords_store(database):
     pass
 
 
-def find_keyword(store, word):
+def find_keyword(word, store=None):
     '''Searches the database for the word.
     store - any model class, like Keyword, Context, etc.
     word - any string
@@ -122,25 +122,35 @@ def find_keyword(store, word):
 #    #if not hasattr(word, "name"):
 #    #    keyword = Keyword(name=word)
 
-# TODO: unit tests for all these functions
-def create_keyword(store, word, buf):
+def create_keyword(word, context, buf, store=None):
     '''Creates a new keyword with name=word and adds contents from vim buffer
     as information for the keyword and updates the database.
-    Returns the keyword.'''
-    keyword = Keyword(name=word)
-    keyword.save()
-    #context = Context
-    #buf_content = read_vim_buffer(buf, 0)
-    #update_info(store, keyword, buf_content)
+    Returns the keyword.
+    '''
+
+    keyword = Keyword.objects.create(name=word)
+    if not context:
+        # use the default context
+        context = Context.objects.get(name="default")
+    # create the ManyToMany relationship
+    r1 = Data(keyword=keyword, context=context)
+    r1.save()
+    #r1.info_public = "http://kivy.org/docs/api-kivy.graphics.html#kivy.graphics.Canvas"
+    #r1.info = ("Define a canvas section in which you can add Graphics "
+    #           "instructions that define how the widget is rendered.")
+    #r1.save()
+    buf_content = read_vim_buffer(buf, 0)
+    update_info(keyword, buf_content, store)
     return keyword
 
 
-def update_keyword(store, keyword, buf):
+# TODO: unit tests for all these functions
+def update_keyword(keyword, buf, store=None):
     '''Reads contents from vim buffer except for the title line and updates
     the keyword's info (personal note), not info_public.
     '''
     buf_content = read_vim_buffer(buf, 1)
-    update_info(store, keyword, buf_content)
+    update_info(keyword, buf_content, store)
     #store.find(Keyword, Keyword.name == keyword.name).set(info=buf_content)
     # write to DB file
     return keyword
@@ -156,7 +166,7 @@ def read_vim_buffer(buf, start_line):
 
 def update_info(keyword, context, content):
     'Updates the keyword information and commits to database.'
-    data = keyword.data_set.get(keyword=keyword, context=context)
+    data = keyword.data_set.get(context=context)
     data.info = content
     data.save()
     # maybe content replaced with info, and info_public added

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/bin/python
 # -*- coding: utf-8 -*-
 
 """
@@ -40,8 +40,7 @@ from vimrunner import Server
 
 # gotoword modules
 from gotoword import VimWrapper
-from gotoword import STORE
-import utils
+import utils2 as utils
 #import logserver
 import asyncorelog
 
@@ -517,11 +516,11 @@ class TestGotoword(unittest.TestCase):
         # plugin we are testing in this test suite.
         context = "python"
         ctx_words = self.get_context_keywords(self.buffer_index, context)
-        # get context from DB as a Storm object and count keywords straight
+        # get context from DB as a Context object and count keywords straight
         # from DB table
-        ctx = utils.Context.find_context(STORE, unicode(context))
+        ctx = utils.Context.objects.get(name=context)
         # compare the two numbers
-        assert (ctx.keywords.count() == len(ctx_words.split("\n")) - 1)
+        assert (len(ctx.keyword_set.all()) == len(ctx_words.split("\n")) - 1)
         # len(lines) - 1 because we omit the title line
 
     ### other utilitary functions ###

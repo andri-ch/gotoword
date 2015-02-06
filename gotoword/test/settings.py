@@ -1,6 +1,7 @@
 # -*- coding: utf8 -*-
 
-
+#import sys
+#print(sys.path)
 from standalone.conf import settings
 # use call_command to migrate/syncdb right after this app(plugin) is installed
 #from django.core.management import call_command
