@@ -293,7 +293,7 @@ import vim
 # --------------------------------
 # Add our plugin to the path
 # --------------------------------
-sys.path.append(vim.eval('expand("<sfile>:h")'))
+sys.path.insert(1, vim.eval('expand("<sfile>:h")'))
 #python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
 # :help sfile
 

@@ -6,11 +6,6 @@ import logging.handlers
 import os.path
 import sys
 
-### Third party libs ###
-# for database:
-#from storm.locals import Store
-
-### import vim python library ###
 try:
     import vim
     # the vim module contains everything we need to interact with Vim
@@ -129,12 +124,54 @@ SOURCE_DIR = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME,
                           PYTHON_PACKAGE)
 sys.path.insert(1, SOURCE_DIR)
 # Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
+#sys.path.insert(2, os.path.join(PLUGIN_PATH, 'virtualenv', 'lib', 'python2.7'))
+#sys.path.insert(3, os.path.join(PLUGIN_PATH, 'virtualenv', 'lib', 'python2.7',
+                #'site-packages'))
+import imp
+#fp, pathname, description = imp.find_module('conf', [os.path.join(PLUGIN_PATH,
+#    'virtualenv', 'lib', 'python2.7', 'site-packages')])
+#fp, pathname, description = imp.find_module('conf',
+#        ['/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/lib/python2.7/site-packages'])
+#try:
+#    conf = imp.load_module('conf', fp, pathname, description)
+#finally:
+#    # Since we may exit via an exception, close fp explicitly.
+#    if fp:
+#        fp.close()
 
+
+def custom_importer(name, pathname):
+    # Fast path: see if the module has already been imported.
+    try:
+        return sys.modules[name]
+    except KeyError:
+        pass
+
+    # If any of the following calls raises an exception,
+    # there's a problem we can't handle -- let the caller handle it.
+
+    fp, pathname, description = imp.find_module(name)
+
+    try:
+        return imp.load_module(name, fp, pathname, description)
+    finally:
+        # Since we may exit via an exception, close fp explicitly.
+        if fp:
+            fp.close()
+
+#standalone = custom_importer('standalone', '/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/lib/python2.7/site-packages')
+#conf = custom_importer('conf', standalone.__path__)
+#
+#logger.debug("sys.path: %s" % sys.path, extra={'className': ""})
 # plugin's database that holds all the keywords and their info:
-DATABASE = 'keywords.db'
+DATABASE = os.path.join(PLUGIN_PATH, 'keywords.db')
+
+#import pdb; pdb.set_trace()
 
 from settings import setup
 setup(DATABASE)
+#import settings
+#settings.setup(DATABASE)
 import utils2 as utils
 # TODO: Can sys.path.insert() be avoided if we have a proper __init__.py file in the
 # package?
@@ -275,6 +312,8 @@ class App(object):
         self.vim_wrapper = vim_wrapper
         self.word = None
         self.keyword = None
+        self.keyword_context = None
+        self.default_context = utils.Context.objects.get(name='default')
         # the current keyword which will be displayed in helper buffer
         logger.debug("plugin started from Vim with pid: %s" %
                      os.getpid(), extra={'className': strip(self.__class__)})
@@ -562,8 +601,6 @@ class VimWrapper(object):
                      (self.help_buffer, self.buffer_nr),
                      extra={'className': strip(self.__class__)})
 
-        logger.info("emit_counter: %s" % logger.handlers[1].emit_counter, extra={'className': ""})
-
         # activate the buffer so we can set some buffer options
         vim.command("buffer! %s" % self.buffer_nr)
         # make it a scratch buffer
@@ -632,17 +669,20 @@ class VimWrapper(object):
         if keyword:
             # get contexts this keyword belongs to (specific to ORM); it
             # should be moved to utils
-            contexts = [ctx.name for ctx in keyword.contexts.objects.all()]
-            contexts.sort()
+            contexts = keyword.contexts.all()
+            ctx_names = [ctx.name for ctx in contexts]
+            ctx_names.sort()
             logger.debug("word: %s keyword: %s contexts: %s" %
-                         (word, keyword, contexts),
+                         (word, keyword, ctx_names),
                          extra={'className': strip(self.__class__)})
             # add a title line at the top;
             # TODO: is the title line removed when kw is updated?
             self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
-                                     (keyword.name, " ".join(contexts))]
+                                     (keyword.name, "; ".join(ctx_names))]
             # load content in buffer, previous content is deleted
-            self.help_buffer[1:] = keyword.info.splitlines()
+            ## for now, only content from first context is displayed:
+            content_main_ctx = keyword.data_set.get(context=contexts[0])
+            self.help_buffer[1:] = content_main_ctx.info.splitlines()
         else:
             # keyword doesn't exist, prepare buffer to be filled with user content
             logger.debug("word: %s keyword: %s" %
@@ -711,6 +751,7 @@ class EntryState(object):
             # kw exists in db, context was not given by user -> update kw info
             # to same context, if context exists, or to no context at all
             logger.debug("kw and not context", extra={'className': strip(self.__class__)})
+            app.keyword_context = app.default_context
             return UpdateKeywordState()
             #return None
         else:
@@ -748,7 +789,7 @@ class ReadContextState(object):
         # eg: while not answer in ('0', '1', '2')
         answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
                 "0. Yes, I will provide a context [0 and press <Enter>]", \
-                "1. No, I won't provide a context [1 and press <Enter>]", \
+                "1. No, I won't provide a context - use the default one [1 and press <Enter>]", \
                 "2. Abort [2 and press <Enter>]" ])
                 """)
         # TODO: provide another option for 'Yes, I will provide an existing
@@ -814,7 +855,7 @@ class NewKeywordState(object):
     @log
     #@database_operations
     def evaluate(self, app, kw, context, test_answer):
-        # global app
+        context = app.keyword_context
         app.keyword = utils.create_keyword(app.word, context,
                                            app.vim_wrapper.help_buffer)
         logger.debug("kw: %s, context: %s, test_answer: %s" %
@@ -891,12 +932,15 @@ class CreateContextState(object):
 
 
 class UpdateKeywordState(object):
-    "Updates the information field of a keyword."
+    """Updates the information field of a keyword. No states follow after
+    this one."""
     @log
     #@database_operations
     def evaluate(self, app, kw, context, test_answer):
-        # retrieve context
-        pass
+        utils.update_keyword(kw, app.keyword_context,
+                             app.vim_wrapper.help_buffer)
+        vim.command('echomsg "Info field of keyword \"%s\" updated"' % kw.name)
+        return None
 
 
 def get_user_input(message, test_answer):

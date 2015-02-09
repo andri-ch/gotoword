@@ -24,6 +24,7 @@ decorator pytest.mark.incremental does not function properly.
 from os import sys, path
 sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 
+
 import os
 import time
 import logging
@@ -39,8 +40,8 @@ unittest.defaultTestLoader.sortTestMethodsUsing = None
 from vimrunner import Server
 
 # gotoword modules
-from gotoword import VimWrapper
-import utils2 as utils
+#from gotoword import VimWrapper
+#import utils2 as utils
 #import logserver
 import asyncorelog
 
@@ -151,6 +152,7 @@ class TestGotoword(unittest.TestCase):
             # edit test file
         cls.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
                                      TEST_FILE))
+        time.sleep(2)
         buffers = cls.client.command('ls!')
         # buffers is similar to:
         # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
@@ -506,22 +508,22 @@ class TestGotoword(unittest.TestCase):
         time.sleep(0.5)
 
     #@unittest.skip("")
-    def test_013_HelperContextWords(self):
-        ## -------------------------
-        ## test 'HelperContextWords'
-        ## -------------------------
-        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
-                          extra={'className': ""})
-        # get keywords that are defined in the 'python' context using the
-        # plugin we are testing in this test suite.
-        context = "python"
-        ctx_words = self.get_context_keywords(self.buffer_index, context)
-        # get context from DB as a Context object and count keywords straight
-        # from DB table
-        ctx = utils.Context.objects.get(name=context)
-        # compare the two numbers
-        assert (len(ctx.keyword_set.all()) == len(ctx_words.split("\n")) - 1)
-        # len(lines) - 1 because we omit the title line
+#    def test_013_HelperContextWords(self):
+#        ## -------------------------
+#        ## test 'HelperContextWords'
+#        ## -------------------------
+#        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+#                          extra={'className': ""})
+#        # get keywords that are defined in the 'python' context using the
+#        # plugin we are testing in this test suite.
+#        context = "python"
+#        ctx_words = self.get_context_keywords(self.buffer_index, context)
+#        # get context from DB as a Context object and count keywords straight
+#        # from DB table
+#        ctx = utils.Context.objects.get(name=context)
+#        # compare the two numbers
+#        assert (len(ctx.keyword_set.all()) == len(ctx_words.split("\n")) - 1)
+#        # len(lines) - 1 because we omit the title line
 
     ### other utilitary functions ###
     #################################
@@ -603,7 +605,7 @@ class TestGotoword(unittest.TestCase):
         # module binding to Vim editor as a global variable, but we substitute
         # it with a partially compatible Vim server client
         # focus window:
-        VimWrapper.open_window(buffer_name, self.client)
+        self.open_window(buffer_name, self.client)
         ###
 
         # pause a bit to allow visual inspection, if needed
@@ -619,9 +621,10 @@ class TestGotoword(unittest.TestCase):
 
     def delay(self, expected_value, timeout=1):
         """
-        It makes sure that Vim has caught up with the stage/state of a test
-        by setting a Vim flag and waiting timeout seconds before it checks
-        its flag; it checks and waits timeout seconds to a maximum of 5 times.
+        It makes sure that Vim has updated its buffers and has caught up with
+        the stage/state of a functional test by setting a Vim flag and waiting
+        timeout seconds before it checks its flag; it checks and waits timeout
+        seconds to a maximum of 5 times.
 
         client.command returns its output as unicode because the tests are
         using vimrunner module.
@@ -633,6 +636,33 @@ class TestGotoword(unittest.TestCase):
             i += 1
             if i == 5:
                 raise RuntimeError("timeout of %s expired" % expected_value)
+
+    def open_window(self, buffer_name, editor=None):
+        """
+        Opens a window inside vim editor with an existing buffer whose name is
+        buffer name.
+        editor - the editor is the global var. vim, but it is given as arg. so
+                 that you can import this fct. in other modules, as well, such
+                 as the testing module.
+        """
+        # save current global value of 'switchbuf' in order to restore it later
+        # and add 'useopen' value to it
+        editor.command("let oldswitchbuf=&switchbuf | set switchbuf+=useopen")
+
+        # open help buffer
+        # 'sbuffer' replaces 'split' because we want to use same buffer window if
+        # it exists because sbuffer checks the switchbuf option
+        editor.command("sbuffer %s" % buffer_name)
+
+        # restore switchbuf to its default value in order not to affect other plugin
+        # functionality:
+        editor.command("let &switchbuf=oldswitchbuf | unlet oldswitchbuf")
+
+        # prevent vim from focusing the helper window created on top, by
+        # focusing the last one used (the window used by user before calling this
+        # plugin).
+        # CTRL-W p   Go to previous (last accessed) window.
+        editor.command('call feedkeys("\<C-w>p")')
 
 
 if __name__ == '__main__':

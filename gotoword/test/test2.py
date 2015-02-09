@@ -311,8 +311,14 @@ else:                                # when it is being imported
 
     # get all keywords that have a definition in kivy context:
     words = kivy.keyword_set.all()
+    # Display all keyword names that have a definition belonging to "kivy"
+    # context:
+    context_kwds = [kwd.name for kwd in kivy.keyword_set.all()]
+
     # get all contexts in which canvas has a definition:
     canvas_contexts = canvas.contexts.all()
+    assert (len(canvas_contexts) == 1)
+    #print(canvas_contexts)
 
     # add definition of canvas in python context:
     canvas_python = Data(keyword=canvas, context=python)
@@ -341,6 +347,6 @@ else:                                # when it is being imported
     # select only the keyword names
     all_keywords = [kwd.name for kwd in Keyword.objects.all()]
 
-    # Display all keywords that have a definition belonging to "kivy" context:
-    context_kwds = [kwd.name for kwd in kivy.keyword_set.all()]
+
+    # Display all
 

@@ -2,7 +2,15 @@
 
 #import sys
 #print(sys.path)
+#try:
+#    from standalone.conf import settings
+#except ImportError:
+#    pass
 from standalone.conf import settings
+#try:
+#    import standalone.conf
+#except ImportError:
+#    sys.exit()
 # use call_command to migrate/syncdb right after this app(plugin) is installed
 #from django.core.management import call_command
 
