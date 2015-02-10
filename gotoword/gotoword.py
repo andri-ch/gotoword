@@ -4,7 +4,7 @@
 import logging
 import logging.handlers
 import os.path
-import sys
+#import sys
 
 try:
     import vim
@@ -42,6 +42,9 @@ def set_up_logging(default_level):
     socket_formatter = logging.Formatter(sock_msg_format)
     socket_handler.setFormatter(socket_formatter)
 
+    # override Logger.makeRecord with a custom one to allow
+    # logging facilities used by @log:
+    logging.Logger.makeRecord = custom_makeRecord
     logger = logging.getLogger('app')
     logger.setLevel(default_level)
     logger.addHandler(file_handler)
@@ -49,21 +52,58 @@ def set_up_logging(default_level):
     return logger
 
 
+def custom_makeRecord(self, name, level, fn, lno, msg, args, exc_info, func=None, extra=None):
+        """
+        A factory method which can be overridden in subclasses to create
+        specialized LogRecords.
+
+        For instance, 'funcName' is an attribute of LogRecord, created
+        automatically and cannot be overwritten except if you use a
+        LoggerAdapter instead of Logger.
+
+        With this method, LogRecord attbutes can now be overwritten by keys
+        in 'extra' dict.
+        Eg:
+        >>> logger.debug('test message', extra={'funcName': 'some_fct'})
+
+        """
+        rv = logging.LogRecord(name, level, fn, lno, msg, args, exc_info, func)
+        if extra is not None:
+            for key in extra:
+                #if (key in ["message", "asctime"]) or (key in rv.__dict__):
+                #    raise KeyError("Attempt to overwrite %r in LogRecord" % key)
+                rv.__dict__[key] = extra[key]
+        return rv
+
+
 def log(fn):
     """Adapted the decorator for extracting the name of the function even if
     the function is decorated.
     """
-    decorators = get_decorators(fn)
-    fn = decorators[-1]
+    # uncomment if multiple decorators wrap fn:
+    #decorators = get_decorators(fn)
+    #fn = decorators[0]
 
-    def wrapper(*args, **kwargs):
-        logger.debug('About to run %s with args: %s and kwargs: %s' % (fn.__name__, args[1:], kwargs),
-                     extra={'className': getattr(fn, 'im_class', "")})
+    def wrapper(obj, *args, **kwargs):
+        """
+        Because fn is wrapped, the function name when logging, will be
+        'wrapper':
+        >>> fn.__repr__()
+        '<unbound method CheckContextState.wrapper>'
+        """
+        logger.debug('About to run %s with args: %s and kwargs: %s' %
+                     (fn.__name__, args[1:], kwargs),
+                     extra={'className': strip(getattr(obj, '__class__', "")),
+                            'funcName': fn.__name__}
+                     )
         # getattr() is needed because not all functions decorated by log()
         # are bounded to a class instance.
-        out = fn(*args, **kwargs)
-        logger.debug('Done running %s; return value: %s' % (fn.__name__, out),
-                     extra={'className': getattr(fn, 'im_class', "")})
+        out = fn(obj, *args, **kwargs)
+        logger.debug('Done running %s; return value: %s' %
+                     (fn.__name__, out),
+                     extra={'className': strip(getattr(obj, '__class__', "")),
+                            'funcName': fn.__name__}
+                     )
         return out
     return wrapper
 
@@ -91,7 +131,7 @@ def get_decorators(function):
 
 logger = set_up_logging(logging.DEBUG)
 #logger = set_up_logging(logging.INFO)
-logger.debug("SCRIPT STARTED", extra={'className': ""})
+logger.debug("SCRIPT STARTED", extra={'className': ""}),
 #logger.debug("logger parameters: \n"
 #             "\t\thandlers: %s \n"
 #             "\t\tSocketHandler socket %s \n" %
@@ -100,78 +140,8 @@ logger.debug("SCRIPT STARTED", extra={'className': ""})
 #             )
 #logger.info("emit_counter: %s" % logger.handlers[1].emit_counter, extra={'className': ""})
 
-
-# Get rid of so many variables
-VIM_FOLDER = os.path.expanduser('~/.vim')
-PLUGINS_FOLDER = 'andrei_plugins'
-# PLUGINS_FOLDER can be any of "plugin", "autoload", etc.
-
-# TODO: decide in which plugin folder is more appropriate to install this
-# plugin and you might get rid of all these constants or put them in a dict
-
-PLUGIN_NAME = 'gotoword'
-PYTHON_PACKAGE = 'gotoword'
-
-PLUGIN_PATH = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCRIPT = os.path.join(PLUGIN_PATH, 'gotoword.vim')
-
-### Own libraries ###
-# NOTICE
-# the python path when these lines are executed is the path of the currently
-# active buffer (vim.current.buffer)
-# So, to import our own libs, we have to add them to python path.
-SOURCE_DIR = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME,
-                          PYTHON_PACKAGE)
-sys.path.insert(1, SOURCE_DIR)
-# Eg. '/home/username/.vim/a_plugins_dir/gotoword/gotoword'
-#sys.path.insert(2, os.path.join(PLUGIN_PATH, 'virtualenv', 'lib', 'python2.7'))
-#sys.path.insert(3, os.path.join(PLUGIN_PATH, 'virtualenv', 'lib', 'python2.7',
-                #'site-packages'))
-import imp
-#fp, pathname, description = imp.find_module('conf', [os.path.join(PLUGIN_PATH,
-#    'virtualenv', 'lib', 'python2.7', 'site-packages')])
-#fp, pathname, description = imp.find_module('conf',
-#        ['/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/lib/python2.7/site-packages'])
-#try:
-#    conf = imp.load_module('conf', fp, pathname, description)
-#finally:
-#    # Since we may exit via an exception, close fp explicitly.
-#    if fp:
-#        fp.close()
-
-
-def custom_importer(name, pathname):
-    # Fast path: see if the module has already been imported.
-    try:
-        return sys.modules[name]
-    except KeyError:
-        pass
-
-    # If any of the following calls raises an exception,
-    # there's a problem we can't handle -- let the caller handle it.
-
-    fp, pathname, description = imp.find_module(name)
-
-    try:
-        return imp.load_module(name, fp, pathname, description)
-    finally:
-        # Since we may exit via an exception, close fp explicitly.
-        if fp:
-            fp.close()
-
-#standalone = custom_importer('standalone', '/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/lib/python2.7/site-packages')
-#conf = custom_importer('conf', standalone.__path__)
-#
-#logger.debug("sys.path: %s" % sys.path, extra={'className': ""})
-# plugin's database that holds all the keywords and their info:
-DATABASE = os.path.join(PLUGIN_PATH, 'keywords.db')
-
-#import pdb; pdb.set_trace()
-
-from settings import setup
-setup(DATABASE)
-#import settings
-#settings.setup(DATABASE)
+from settings import (VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE,
+                      PLUGIN_PATH, SCRIPT, SOURCE_DIR, DATABASE)
 import utils2 as utils
 # TODO: Can sys.path.insert() be avoided if we have a proper __init__.py file in the
 # package?
@@ -313,7 +283,9 @@ class App(object):
         self.word = None
         self.keyword = None
         self.keyword_context = None
-        self.default_context = utils.Context.objects.get(name='default')
+        # we are sure that 'default' context exists in DB
+        self.default_context = utils.find_model_object('default',
+                                                       utils.Context)
         # the current keyword which will be displayed in helper buffer
         logger.debug("plugin started from Vim with pid: %s" %
                      os.getpid(), extra={'className': strip(self.__class__)})
@@ -663,8 +635,7 @@ class VimWrapper(object):
         self.open_window(self.parent.help_buffer_name, vim)
 
         # look for keyword in DB
-        #keyword = utils.find_keyword(self.vim_wrapper.parent.store, word)
-        keyword = utils.find_keyword(self.parent.word)
+        keyword = utils.find_model_object(self.parent.word, utils.Keyword)
 
         if keyword:
             # get contexts this keyword belongs to (specific to ORM); it
@@ -730,14 +701,14 @@ class EntryState(object):
             # case when kw doesn't exist in DB and context was given by user;
             # context was supplied by user to save keyword in that context;
             # check if it exists in the database (if it is not a new one)
-            ctx = utils.Context.objects.get(name=context)
+            ctx = utils.find_model_object(context, utils.Context)
             # if context not in DB, ctx will be None, create a new context
             if not ctx:
                 # TODO: prompt user that context doesn't exist and must be
                 # created; if yes:
                 # save it to DB
                 app.new_context2 = True
-                ctx = utils.Context.create(name=context)
+                ctx = utils.Context.objects.create(name=context)
 #                STORE.add(ctx)
 #                STORE.commit()
             # transform app.context which is just a string into a Storm object
@@ -840,14 +811,15 @@ class ReadContextState(object):
         elif answer.startswith('2') or answer.startswith('a'):
             # Abort
             vim.command('echo ""')     # make prompt pass to next line ???!, for pretty printing
-            vim.command('echomsg "You entered: [\"%s\"]"' % answer)
-            vim.command('echo "You entered: [\"%s\"]"' % test_answer)
+            vim.command('echomsg "You entered: [\"%s\"] \n"' % answer)
+            vim.command('echo "You entered test answer: [\"%s\"]"' % test_answer)
             vim.command('echo ""')     # make prompt pass to next line, for pretty printing
-            vim.command('echo "None is returned"')
+            #vim.command('echo "None is returned"')
             return None
         else:
+            # user made a mistake, repeat whole process
             vim.command('echomsg "Invalid option! Type a number from 0 to 2"')
-            return None
+            return self
 
 
 class NewKeywordState(object):
@@ -855,7 +827,7 @@ class NewKeywordState(object):
     @log
     #@database_operations
     def evaluate(self, app, kw, context, test_answer):
-        context = app.keyword_context
+        #context = app.keyword_context
         app.keyword = utils.create_keyword(app.word, context,
                                            app.vim_wrapper.help_buffer)
         logger.debug("kw: %s, context: %s, test_answer: %s" %
@@ -883,11 +855,11 @@ class CheckContextState(object):
     #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
         # capture from stdin the context name
-        message = "Enter a one word context name: \n"
+        message = "Enter a one word context name: "
         answer = get_user_input(message, test_answer)
+
         # validate it
-        #context = STORE.find(utils.Context, utils.Context.name == answer).one()
-        context = utils.Context.objects.get(name=answer)
+        context = utils.find_model_object(answer, utils.Context)
         # debug
         logger.debug("kw: %s, context: %s, test_answer: %s, answer: %s" %
                      (app.keyword, context, test_answer, answer),
@@ -911,7 +883,7 @@ class CreateContextState(object):
     @log
     #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
-        context = utils.Context.create(name=context)
+        context = utils.Context.objects.create(name=context)
         # make it a storm object
 #        context = STORE.add(context)
 

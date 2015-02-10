@@ -302,10 +302,15 @@ sys.path.insert(1, vim.eval('expand("<sfile>:h")'))
 # python print sys.path
 
 try:
+    # django related settings must be imported before utils or gotoword:
+    from gotoword import settings
+    settings.setup(settings.DATABASE)
     #from gotoword import gotoword, utils
     from gotoword import gotoword
     from gotoword import utils2 as utils
 except ImportError:
+    import settings
+    settings.setup(settings.DATABASE)
     #import gotoword, utils
     import gotoword
     import utils2 as utils

@@ -1,5 +1,6 @@
-#!/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/bin/python
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
+#!/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/bin/python
 
 """
 This file contains functional tests for "gotoword" python app.
@@ -152,7 +153,6 @@ class TestGotoword(unittest.TestCase):
             # edit test file
         cls.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
                                      TEST_FILE))
-        time.sleep(2)
         buffers = cls.client.command('ls!')
         # buffers is similar to:
         # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n

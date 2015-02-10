@@ -154,18 +154,30 @@ def load_keywords_store(database):
     pass
 
 
-def find_keyword(word, store=None):
+def find_model_object(name, model=None):
     '''Searches the database for the word.
     store - any model class, like Keyword, Context, etc.
     word - any string
     Eg.:
-        find_keyword(Keyword, "canvas")
+        find_model_object("canvas", Keyword)
+        find_model_object("default", Context)
     '''
     try:
-        keyword = Keyword.objects.get(name=word)
-    except Keyword.DoesNotExist:
-        return None
-    return keyword
+        model_obj = model.objects.get(name=name)
+    except model.DoesNotExist:
+        if name == 'default':
+            raise RuntimeError("Database file doesn't contain the default "
+                               "context: %s, but it should!" % name)
+        else:
+            return None
+    return model_obj
+
+#def find_context(context, store=None):
+#    try:
+#        context = Context.objects.get(name=context)
+#    except Keyword.DoesNotExist:
+#        return None
+#    return context
 
 
 #    Workflow:
@@ -186,7 +198,7 @@ def create_keyword(word, context, buf, store=None):
     '''
 
     keyword = Keyword.objects.create(name=word)
-    if not context:
+    if not context:    # context can be a str or a context obj. This logic is not alright...
         # use the default context
         context = Context.objects.get(name="default")
     # create the ManyToMany relationship
