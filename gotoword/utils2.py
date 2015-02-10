@@ -63,7 +63,7 @@ from standalone import models
 class Context(models.StandaloneModel):
     """Keywords have different definitions depending on the context.
     Eg.:
-    kivy = Context.objects.create(name="kivy GUI", description="Kivy is an " +
+    kivy = Context.objects.create(name="kivy", description="Kivy is an " +
              "OSS library for GUI development suitable for multi-touch apps.")
     """
     name = models.CharField("context name", max_length=50, unique=True)
@@ -209,7 +209,7 @@ def create_keyword(word, context, buf, store=None):
     #           "instructions that define how the widget is rendered.")
     #r1.save()
     buf_content = read_vim_buffer(buf, 0)
-    update_info(keyword, buf_content, store)
+    update_info(keyword, context, buf_content, store)
     return keyword
 
 
@@ -219,7 +219,7 @@ def update_keyword(keyword, context, buf, store=None):
     the keyword's info (personal note), not info_public.
     '''
     content = read_vim_buffer(buf, 1)
-    update_info(keyword, context, content)
+    update_info(keyword, context, content, store)
     #store.find(Keyword, Keyword.name == keyword.name).set(info=buf_content)
     # write to DB file
     return keyword
@@ -233,7 +233,7 @@ def read_vim_buffer(buf, start_line):
     return buf_content
 
 
-def update_info(keyword, context, content):
+def update_info(keyword, context, content, store):
     'Updates the keyword information and commits to database.'
     data = keyword.data_set.get(context=context)
     data.info = content

@@ -321,18 +321,20 @@ class TestGotoword(unittest.TestCase):
         ##
         #self.client.feedkeys('2 \<Enter>')
 
-        time.sleep(0.5)
+        self.delay("test004-HelperSave")
+        #time.sleep(0.5)
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
         self.logger.debug("all_words: %s" % all_words,
                           extra={'className': ""})
-        time.sleep(0.2)
+        self.delay("test004-all_words")
         assert ('rgb' in all_words)
         # check that 'rgb' has a context it belongs to
         word_contexts = self.get_keyword_contexts(self.buffer_index)
+        self.delay("test004-all_contexts")
         self.logger.debug("word_contexts: %s" % word_contexts,
                           extra={'className': ""})
-        time.sleep(0.5)
+        #time.sleep(0.5)
         assert ('0' in word_contexts)
         # revert
         self.client.command('HelperDelete')
@@ -385,11 +387,11 @@ class TestGotoword(unittest.TestCase):
         self.logger.debug("all_words: %s " % all_words,
                           extra={'className': ""})
         assert ('rgb' in all_words)
-        # check 'rgb' is saved with no context
+        # check 'rgb' is saved to default context, user didn't give a context
         word_contexts = self.get_keyword_contexts(self.buffer_index)
         self.logger.debug("word_contexts: %s" % word_contexts,
                           extra={'className': ""})
-        assert ("doesn't belong" in word_contexts)
+        assert ("default" in word_contexts)
         # ok, now delete it to revert database
         self.client.command('HelperDelete')
 

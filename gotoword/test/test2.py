@@ -94,8 +94,8 @@ keywords = {'canvas': "Define a canvas section in which you can add Graphics ins
             'test': "This is awesome"
             }
 
-contexts = {'kivy GUI': ("Kivy is an OSS library for GUI "
-                         "development suitable for multi-touch apps."),
+contexts = {'kivy': ("Kivy is an OSS library for GUI "
+                     "development suitable for multi-touch apps."),
             'python': "programming langugage",
             'django': "web framework",
             }
@@ -192,7 +192,7 @@ class TestMain(unittest.TestCase):
         Color:""".splitlines()
 
         testword = Keyword.objects.create(name='testword')
-        kivy = Context.objects.get(name='kivy GUI')
+        kivy = Context.objects.get(name='kivy')
         testword_kivy = Data(keyword=testword, context=kivy)
         testword_kivy.info = "my note about testword in kivy context"
         testword_kivy.save()
@@ -204,7 +204,7 @@ class TestMain(unittest.TestCase):
 
     def test_update_keyword(self):
         kw = Keyword.objects.create(name='test_update_keyword')
-        kivy = Context.objects.get(name='kivy GUI')
+        kivy = Context.objects.get(name='kivy')
         kw_kivy = Data(keyword=kw, context=kivy)
         kw_kivy.info = "my note about testword in kivy context"
         kw_kivy.save()
@@ -285,7 +285,7 @@ else:                                # when it is being imported
     call_command('syncdb')
 
     kivy = Context.objects.create(
-        name="kivy GUI", description="Kivy is an OSS library for GUI " +
+        name="kivy", description="Kivy is an OSS library for GUI " +
         "development suitable for multi-touch apps.")
     canvas = Keyword.objects.create(name="canvas")
 

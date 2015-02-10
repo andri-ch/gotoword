@@ -525,7 +525,8 @@ class App(object):
                 "contexts:" % kw.name]
             self.vim_wrapper.help_buffer[1:] = contexts
         else:
-            # this branch is not useful since django orm
+            # this branch is not useful since django orm so it should be
+            # deleted
             self.vim_wrapper.help_buffer[:] = [
                 "The keyword '%s' has information that doesn't belong to any "
                 "context" % kw.name]
@@ -830,14 +831,11 @@ class NewKeywordState(object):
         #context = app.keyword_context
         app.keyword = utils.create_keyword(app.word, context,
                                            app.vim_wrapper.help_buffer)
-        logger.debug("kw: %s, context: %s, test_answer: %s" %
-                     (app.keyword, context, test_answer),
-                     extra={'className': strip(self.__class__)})
-        # add keyword definition to context
-        #app.keyword.contexts.add(context)
-        #STORE.commit()
+        #logger.debug("kw: %s, context: %s, test_answer: %s" %
+        #             (app.keyword, context, test_answer),
+        #             extra={'className': strip(self.__class__)})
         logger.debug('echomsg "keyword %s saved into context %s"' %
-                     (app.keyword.name, context),
+                     (app.keyword.name, context.name),
                      extra={'className': strip(self.__class__)})
         return None
 
@@ -883,21 +881,16 @@ class CreateContextState(object):
     @log
     #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
-        context = utils.Context.objects.create(name=context)
-        # make it a storm object
-#        context = STORE.add(context)
-
         # capture from stdin the short description of the context
         message = "Enter a short description of the context you just defined: \n"
         answer = get_user_input(message, test_answer)
+
+        context = utils.Context.objects.create(name=context,
+                                               description=answer)
         # debug
         logger.debug("kw: %s, context: %s, test_answer: %s, answer: %s" %
                      (app.keyword, context, test_answer, answer),
                      extra={'className': strip(self.__class__)})
-        # add it to the storm object, to the appropriate field
-        # TODO: add a 'description' field to utils.Context
-        #context.description = answer
-#        STORE.commit()
         app.context = context
         #return None
         return NewKeywordState()
