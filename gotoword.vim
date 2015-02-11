@@ -288,14 +288,24 @@ endfunction
 " When this script is loaded into VIM, the following code is executed:
 python <<EOF
 
-import sys
 import vim
+import sys
+import os.path
+from glob import glob
+
 # --------------------------------
 # Add our plugin to the path
 # --------------------------------
-sys.path.insert(1, vim.eval('expand("<sfile>:h")'))
+# TODO: following paths are enough, move them to settings and logger as well, and 
+# delete the other bunch of paths
+
+gotoword_plugin_path = vim.eval('expand("<sfile>:h")')
 #python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
 # :help sfile
+venv_packages = os.path.join(gotoword_plugin_path, 'virtualenv/lib/python*/site-packages/')
+django_path = glob(venv_packages)[0]
+sys.path.insert(1, gotoword_plugin_path)
+sys.path.insert(2, django_path)
 
 # DEBUG
 # python print vim.eval('expand("<sfile>:h")') + '/gotoword'

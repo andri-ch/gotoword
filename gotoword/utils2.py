@@ -198,9 +198,6 @@ def create_keyword(word, context, buf, store=None):
     '''
 
     keyword = Keyword.objects.create(name=word)
-    if not context:    # context can be a str or a context obj. This logic is not alright...
-        # use the default context
-        context = Context.objects.get(name="default")
     # create the ManyToMany relationship
     r1 = Data(keyword=keyword, context=context)
     r1.save()

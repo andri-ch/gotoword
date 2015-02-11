@@ -828,12 +828,11 @@ class NewKeywordState(object):
     @log
     #@database_operations
     def evaluate(self, app, kw, context, test_answer):
-        #context = app.keyword_context
+        if not context:
+            # use the default context
+            context = utils.Context.objects.get(name="default")
         app.keyword = utils.create_keyword(app.word, context,
                                            app.vim_wrapper.help_buffer)
-        #logger.debug("kw: %s, context: %s, test_answer: %s" %
-        #             (app.keyword, context, test_answer),
-        #             extra={'className': strip(self.__class__)})
         logger.debug('echomsg "keyword %s saved into context %s"' %
                      (app.keyword.name, context.name),
                      extra={'className': strip(self.__class__)})
