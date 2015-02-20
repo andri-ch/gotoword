@@ -8,11 +8,10 @@ import glob
 # the python path when these lines are executed is the path of the currently
 # active buffer (vim.current.buffer)
 # So, to import our own libs, we have to add them to python path.
-CONF = {
-    'PLUGIN_NAME': 'gotoword',
-    # get the path to this python package
-    'PKG_PATH': os.path.abspath(os.path.dirname(__file__))
-}
+
+PLUGIN_NAME = 'gotoword'
+# get the path to this python package
+PKG_PATH = os.path.abspath(os.path.dirname(__file__))
 '''
 >>> print(pkg_path)
 '/home/andrei/.vim/plugins/gotoword/gotoword'

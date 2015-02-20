@@ -22,11 +22,11 @@ decorator pytest.mark.incremental does not function properly.
 #if __name__ == '__main__' and __package__ is None:
 #    from os import sys, path
 #    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-from os import sys, path
-sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+#from os import sys, path
 
-
-import os
+import sys
+import os.path
+sys.path.insert(1, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import time
 import logging
 import logging.handlers
@@ -42,26 +42,15 @@ import shutil
 from vimrunner import Server
 
 # gotoword modules
-#from gotoword import VimWrapper
-#import utils2 as utils
-#import logserver
 import asyncorelog
-#import gotoword
-#print(dir(gotoword))
-#from gotoword import settings
-#DATABASE = settings.DATABASE
-#DATABASE = os.path.dirname(os.path.abspath("../../keywords.db"))
+from gotoword import settings
 
-SERVER = 'gotoword'
+
+DATABASE = settings.DATABASE
+SERVER = settings.PLUGIN_NAME
 TEST_FILE = 'ft_test_text'
-PLUGIN_PATH = path.dirname(path.dirname(path.dirname(
-    path.abspath(__file__))))
-#print(PLUGIN_PATH)
-SCRIPT = 'gotoword.vim'
-
-HELP_BUFFER = 'gotoword_buffer'
-#HELP_BUFFER = '~/.vim/andrei_plugins/gotoword/helper_buffer'
-
+SCRIPT = settings.SCRIPT
+HELP_BUFFER = settings.HELP_BUFFER
 
 ### SETUP LOGGING ###
 #logging.basicConfig(level=logging.DEBUG)
@@ -154,9 +143,12 @@ class TestGotoword(unittest.TestCase):
         # cls will become self when a test class is instantiated, so
         # attributes will be added to self.
         cls.client = cls.vim.start_in_other_terminal()
-        cls.client.add_plugin(PLUGIN_PATH, SCRIPT)
+        #cls.client.add_plugin(PLUGIN_PATH, SCRIPT)
+        cls.client.add_plugin(os.path.dirname(SCRIPT), 'gotoword.vim')
         # edit test file
-        cls.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
+        #cls.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
+        #                             TEST_FILE))
+        cls.client.edit(os.path.join(settings.VIM_PLUGIN_PATH, 'test',
                                      TEST_FILE))
 
         buffers = cls.client.command('ls!')
@@ -463,8 +455,8 @@ class TestGotoword(unittest.TestCase):
         assert ('rgb' in ctx_words)
 
         # dump database
-        #test_name = inspect.stack()[0][3]
-        #self.copy_database_for_inspection(test_name, DATABASE)
+        test_name = inspect.stack()[0][3]
+        self.copy_database_for_inspection(test_name, DATABASE)
 
         # delete 'rgb'
         self.client.command('HelperDelete')
@@ -489,7 +481,7 @@ class TestGotoword(unittest.TestCase):
         context = "functional tests"
         self.client.command('py app.test_answers.append("test description of '
                             'functional tests")')
-        self.client.command('HelperSave "%s"' % context)
+        self.client.command('HelperSave %s' % context)
         self.delay("test011-HelperSave")
         # update info
         self.client.write_buffer("line('$') + 1",
@@ -699,7 +691,7 @@ class TestGotoword(unittest.TestCase):
             >>> self.copy_database_for_inspection(func_name + ".db")
         '''
         destination = os.path.join(os.path.dirname(database),
-                                   test_name)
+                                   test_name + '.db')
         shutil.copy(database, destination)
 
 

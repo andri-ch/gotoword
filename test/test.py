@@ -63,7 +63,7 @@ from django.core.management import call_command
 #django.setup()
 #####
 
-from utils2 import Keyword, Context, Data
+from utils import Keyword, Context, Data
 
 #DATABASE_PATH = path.dirname(path.abspath(__file__)
 

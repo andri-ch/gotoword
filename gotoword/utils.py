@@ -1,174 +1,136 @@
-#!/usr/bin/python
+# -*- coding: utf8 -*-
+
+import sys
+import imp
+import os
 
 
-from storm.locals import *
-#try:                        # this ca be eliminated as vim will be available in the namespace that imports this file
-#    import vim
-#except ImportError:
-#    print("vim python module can't be used outside vim editor "
-#          "except if you install vimmock python module from PyPI.")
+# TODO: load_src if it's not needed anymore
+def load_src(name, fpath):
+    """load_src("util", "../util.py")"""
+    return imp.load_source(name, os.path.join(os.path.dirname(__file__), fpath))
 
 
-__all__ = ['Keyword', 'Context', 'KeywordContext', 'get_server', 'initialize',
-           'load_keywords_store', 'find_keyword', 'create_keyword',
-           'update_keyword', 'introduction_line']
+# TODO: remove custom importer if it's not needed anymore
+def custom_importer(name, pathname):
+    # Fast path: see if the module has already been imported.
+    try:
+        return sys.modules[name]
+    except KeyError:
+        pass
+
+    # If any of the following calls raises an exception,
+    # there's a problem we can't handle -- let the caller handle it.
+
+    fp, pathname, description = imp.find_module(name)
+
+    try:
+        return imp.load_module(name, fp, pathname, description)
+    finally:
+        # Since we may exit via an exception, close fp explicitly.
+        if fp:
+            fp.close()
+
+#standalone = custom_importer('standalone', )
+#conf = custom_importer('conf', standalone.__path__)
+#standalone_path = ('/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/'
+#                   'lib/python2.7/site-packages')
+#sys.path.insert(1, standalone_path)
+#print(sys.path)
+
+from standalone import models
 
 
-def __dir__():
-    '''This method will be called by dir() and must return the list of
-    attributes. This defines the interface of this module.'''
-    return __all__
+#standalone = load_src('standalone', standalone_path)
+#standalone = imp.load_source('standalone', standalone_path)
+#print(type(standalone))
+#models_path = ('/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/'
+#               'lib/python2.7/site-packages/standalone')
+#models = load_src('models', models_path)
+#models = imp.load_source('models', models_path, 'models.py')
+#print(type(models))
+#print(dir(models))
+#print(models.__package__)
+#print(models.__file__)
+#print(models.__name__)
+#for key in dir(models):
+#    print(eval('models.' + key))
+#import models
+
+#from standalone import models
+# Read more about models:
+# https://docs.djangoproject.com/en/1.7/topics/db/models/
 
 
-class Keyword(Storm):
-    '''This is the model of a keyword.
-    Each instance of this class represents a row in the table 'keyword'
-    which should exist or be created.
-    It must inherit object base class or, for advanced use, Storm.
-    All involved classes should inherit Storm too, if you want to define
-    references at class definition time, using a stringified version of
-    class.property.
+class Context(models.StandaloneModel):
+    """Keywords have different definitions depending on the context.
+    Eg.:
+    kivy = Context.objects.create(name="kivy", description="Kivy is an " +
+             "OSS library for GUI development suitable for multi-touch apps.")
+    """
+    name = models.CharField("context name", max_length=50, unique=True)
+    description = models.CharField("short description of context",
+                                   max_length=100)
 
-    __storm_table__  - table in an SQL database(sqlite, etc.)
-    id - is db specific, for indexing
-    name - is the keyword itself, like "button", etc; it should be unique in DB
-    cmd - will be run to obtain info about the keyword, like reading a man page,
+    def __unicode__(self):
+        return self.name
+
+
+class Keyword(models.StandaloneModel):
+    """
+    name - is the keyword itself, like "button", etc; it should be unique
+        in DB
+    cmd - will be run to obtain info about the keyword, like reading a man
+        page,
+    info_public - note that exists publicly on the internet and people
+        agreed on it
     info - usually an user edited field, this is where the user personalizes
-    the definition.
+        the definition or adds his own.
+    Eg.:
+        canvas = Keyword.objects.create(name="canvas")
+    """
+    name = models.CharField("keyword name", max_length=50, unique=True)
+    contexts = models.ManyToManyField(Context, through='Data')
+    # this is the source model, it has the ManyToManyField
 
-    to learn faster, enable debugging:
+    #col2 = models.ForeignKey("standalone.MyModel")
 
-        >>> import sys
-        >>> from storm.tracer import debug
-        >>> debug(True, stream=sys.stdout)
-        to disable, do
-        >>> debug(False)
-
-        >>> from storm.locals import *
-        create or open an existing db
-        >>> database = create_database("sqlite:keyword.db")
-        On linux, use 'sqlitebrowser' utility to graphically browse the db.
-        >>> store = Store(database)
-        create the table which will hold instances of Keyword class
-        >>> store.execute("CREATE TABLE keyword "
-                          "(id INTEGER PRIMARY KEY, name VARCHAR not NULL, cmd VARCHAR, info VARCHAR)")
-        define a keyword to add to the table
-        >>> keyword1 = Keyword(name=u'canvas')
-        >>> keyword1.info = u"Define a canvas section in which you can add Graphics instructions that define how the widget is rendered."
-        >>> store.add(keyword1)
-        find a keyword with a known name:
-        >>> keyword = store.find(Keyword, Keyword.name == u'canvas').one()
-        save all stuff
-        >>> store.commit()
-    '''
-    __storm_table__ = "keyword"
-    id = Int(primary=True)
-    name = Unicode()
-    cmd = Unicode()
-    info = Unicode()
-    # many-to-many relationship, from keyword's point of view
-    contexts = ReferenceSet("Keyword.id",
-                            "KeywordContext.keyword_id",
-                            "KeywordContext.context_id",
-                            "Context.id")
-    # keywords can have no contexts whatsoever
-
-    def __init__(self, name):
-        self.name = name
-
-    def __str__(self):
+    def __unicode__(self):
+        "useful when calling print() on a class instance."
         return self.name
 
-    @classmethod
-    def create_table(cls, store):
-        '''Create the database table according to class properties.'''
-        # subclasses that will use this method, will call it with their
-        # own __storm_table__
-        store.execute("CREATE TABLE IF NOT EXISTS %s (id INTEGER "
-                      "PRIMARY KEY, name VARCHAR UNIQUE NOT NULL,"
-                      "cmd VARCHAR, info VARCHAR)" % cls.__storm_table__)
-        store.commit()
 
-    #def get_all_keywords():
-    #    # TODO: get all from table keywords and represent them nicely
-    #    pass
+class Data(models.StandaloneModel):
+    """
+    This is the intermediary model for a ManyToMany relationship that shows
+    how Keyword is related to Context.
+    To create ManyToMany relationships, you need to use this model.
+    1. Create a Context and a Keyword:
+    Context is the target model of the ManyToManyField from Keyword model;
+    Keyword is the source model of the ManyToManyField.
+    2. Create the relationship
+    >>> r1 = Data(keyword=canvas, context=kivy)
+    >>> r1.save()
+    # it is possible to let the other kwargs empty when creating a new Data
+    # object and add them later on
+    >>> r1.info_public = "http://kivy.org/docs/api-kivy.graphics.html#" +
+                         "kivy.graphics.Canvas"
+    >>> r1.info = "Define a canvas section in which you can add Graphics " +
+    ...           "instructions that define how the widget is rendered."
+    >>> r1.save()
 
+    info_public(keyword, context)
+    info(keyword, context)
+    cmd(keyword, context)
+    """
+    keyword = models.ForeignKey(Keyword)
+    context = models.ForeignKey(Context)
+    cmd = models.CharField("cmd to run to obtain info", max_length=100)
+    info_public = models.TextField("info note publicly available")
+    info = models.TextField("note with user's own data")
 
-class Context(Storm):
-    '''Keywords have different definitions depending on the context.
-    To create the corresponding DB table, for sqlite:
-    >>> store.execute("CREATE TABLE context (id INTEGER PRIMARY KEY, name VARCHAR)")
-    '''
-    __storm_table__ = "context"
-    id = Int(primary=True)
-    name = Unicode()
-    # TODO: implement a short description?  maybe with django-standalone ORM
-    #description = Unicode()
-
-    # implement many-to-many reference: context has multiple keywords
-    # and keywords have multiple contexts. Get all keywords in context:
-    keywords = ReferenceSet("Context.id",
-                            "KeywordContext.context_id",
-                            "KeywordContext.keyword_id",
-                            "Keyword.id")
-
-    def __init__(self, name):
-        self.name = name
-
-    def __str__(self):
-        return self.name
-
-    @classmethod
-    def create_table(cls, store):
-        '''Context.create_table or Context(u'a_context').create_table'''
-        #store.execute("CREATE TABLE IF NOT EXISTS %s (id INTEGER PRIMARY KEY, "
-        #              "name VARCHAR UNIQUE NOT NULL, description VARCHAR)" %
-        #              cls.__storm_table__)
-        store.execute("CREATE TABLE IF NOT EXISTS %s (id INTEGER PRIMARY KEY, "
-                      "name VARCHAR UNIQUE NOT NULL)" %
-                      cls.__storm_table__)
-        store.commit()
-
-    @classmethod
-    def find_context(cls, store, name):
-        # TODO: you might need to make same abstract class for Keyword & for
-        # Content (they might be polimorphic), same methods are used.
-        res = store.find(cls, cls.name == name).one()
-        return res
-
-    #@classmethod
-    #def new_context(cls, store, name,
-
-    # TODO: def get_all():
-
-
-class KeywordContext(Storm):
-    '''Helps in creating a many-to-many relationship.
-    To create it in DB use:
-
-        >>> store.execute("CREATE TABLE keyword_context(context_id INTEGER,"
-                          "keyword_id INTEGER, PRIMARY KEY (context_id, keyword_id))")
-
-    Notice the syntax for a composed primary key
-    '''
-    __storm_table__ = "keyword_context"
-    # create a composed key
-    __storm_primary__ = "context_id", "keyword_id"
-    context_id = Int()
-    keyword_id = Int()
-
-    @classmethod
-    def create_table(cls, store):
-        store.execute("CREATE TABLE IF NOT EXISTS %s(context_id INTEGER,"
-                      "keyword_id INTEGER, PRIMARY KEY (context_id, "
-                      "keyword_id))" % cls.__storm_table__)
-        store.commit()
-
-
-def get_server():
-    """Return a server daemon connection or start one """
-    # might not be needed anymore
-    pass
+    def __unicode__(self):
+        return self.keyword.name + self.context.name
 
 
 def initialize(database):
@@ -177,12 +139,7 @@ def initialize(database):
     copy the default db.
 
     database - check the docs for load_keywords_store function.'''
-
-    store = load_keywords_store(database)
-    # create table according to Keyword class:
-    store.execute("CREATE TABLE keyword (id INTEGER PRIMARY KEY,"
-                  "name VARCHAR not NULL, cmd VARCHAR, info VARCHAR)")
-    return store
+    pass
 
 
 def load_keywords_store(database):
@@ -196,19 +153,33 @@ def load_keywords_store(database):
     path - it can be an absolute path.
     eg. '/home/user1/data.db' or 'data.db' for file in current dir.
     '''
-    database = create_database(database)
-    store = Store(database)
-    return store
+    pass
 
 
-def find_keyword(store, word):
-    '''Searches the database for the word.'''
-    # find all matches
-    #keywords = store.find(Keyword, Keyword.name == word)
+def find_model_object(name, model=None):
+    '''Searches the database for the word.
+    store - any model class, like Keyword, Context, etc.
+    word - any string
+    Eg.:
+        find_model_object("canvas", Keyword)
+        find_model_object("default", Context)
+    '''
+    try:
+        model_obj = model.objects.get(name=name)
+    except model.DoesNotExist:
+        if name == 'default':
+            raise RuntimeError("Database file doesn't contain the default "
+                               "context: %s, but it should!" % name)
+        else:
+            return None
+    return model_obj
 
-    # return first match
-    keyword = store.find(Keyword, Keyword.name == word).one()
-    return keyword
+#def find_context(context, store=None):
+#    try:
+#        context = Context.objects.get(name=context)
+#    except Keyword.DoesNotExist:
+#        return None
+#    return context
 
 
 #    Workflow:
@@ -222,25 +193,32 @@ def find_keyword(store, word):
 #    #if not hasattr(word, "name"):
 #    #    keyword = Keyword(name=word)
 
-# TODO: unit tests for all these functions
-def create_keyword(store, word, buf):
+def create_keyword(word, context, buf, store=None):
     '''Creates a new keyword with name=word and adds contents from vim buffer
     as information for the keyword and updates the database.
-    Returns the keyword.'''
-    keyword = Keyword(name=word)
-    keyword = store.add(keyword)
+    Returns the keyword.
+    '''
 
+    keyword = Keyword.objects.create(name=word)
+    # create the ManyToMany relationship
+    r1 = Data(keyword=keyword, context=context)
+    r1.save()
+    #r1.info_public = "http://kivy.org/docs/api-kivy.graphics.html#kivy.graphics.Canvas"
+    #r1.info = ("Define a canvas section in which you can add Graphics "
+    #           "instructions that define how the widget is rendered.")
+    #r1.save()
     buf_content = read_vim_buffer(buf, 0)
-    update_info(store, keyword, buf_content)
+    update_info(keyword, context, buf_content, store)
     return keyword
 
 
-def update_keyword(store, keyword, buf):
+# TODO: unit tests for all these functions
+def update_keyword(keyword, context, buf, store=None):
     '''Reads contents from vim buffer except for the title line and updates
-    the keyword information.
+    the keyword's info (personal note), not info_public.
     '''
-    buf_content = read_vim_buffer(buf, 1)
-    update_info(store, keyword, buf_content)
+    content = read_vim_buffer(buf, 1)
+    update_info(keyword, context, content, store)
     #store.find(Keyword, Keyword.name == keyword.name).set(info=buf_content)
     # write to DB file
     return keyword
@@ -254,11 +232,12 @@ def read_vim_buffer(buf, start_line):
     return buf_content
 
 
-def update_info(store, keyword, content):
+def update_info(keyword, context, content, store):
     'Updates the keyword information and commits to database.'
-    ## storm stores content to db as unicode
-    keyword.info = unicode(content)
-    store.commit()
+    data = keyword.data_set.get(context=context)
+    data.info = content
+    data.save()
+    # maybe content replaced with info, and info_public added
 
 
 def introduction_line(word):
@@ -290,3 +269,41 @@ def create_vim_list(values):
     return '[%s]' % ', '.join(values_with_quotes)
     # as a one liner:
     #return '[%s]' % ', '.join("\"%s\"" % elem for elem in values)
+
+
+#def toggle_readonly(f):
+#    """decorator used to set buffer options inside vim editor"""
+#    def wrapper_readonly(obj, *args, **kwargs):
+#        # if called repeatedly, remove readonly flag set by previous calls
+#        vim.command("set noreadonly")
+#        # the format of the log message below takes into account that this is a
+#        # wrapper only for __setitem__() methods that are found in a mapping
+#        # object; I probably should reformat this message
+#        logger.debug("obj: %s, index: %s , value: %s " % (obj, args[0], args[1]),
+#                     extra={'className': ''}
+#                     )
+#        res = f(obj, *args, **kwargs)
+#        vim.command("set readonly")
+#        # by setting buffer readonly, we want user to prevent from saving it
+#        # on harddisk with :w cmd, instead we want user to update the
+#        # database with HelperSave or HelperUpdate vim cmd
+#        return res
+#    return wrapper_readonly
+
+
+#def toggle_activate(f):
+#    """
+#    Activate/focus the helper buffer and then activate/focus again the last
+#    used buffer.
+#    """
+#    def wrapper_activate(obj, *args, **kwargs):
+#        # store old buffer
+#        user_buf_nr = get_active_buffer()
+#        # activate the buffer whose index is obj.index so we can set some
+#        # buffer options
+#        vim.command("buffer! %s" % obj.index)
+#        f(obj, *args, **kwargs)
+#        # f(obj, ...) because we need to pass ALL args to wrapped function;
+#        # make the old buffer active again
+#        vim.command("buffer! %s" % user_buf_nr)
+#    return wrapper_activate

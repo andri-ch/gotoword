@@ -1,12 +1,13 @@
 " Vim global plugin for displaying info about the word under cursor
-" Last Change:	2014 June 17
+" Last Change:	2015 February 21
 " Maintainer:	Andrei Chiver  <andreichiver@gmail.com>
 " License:	This file is placed in the public domain.
 
 
 " SHORT DESCRIPTION
-" plugin that opens a help file in a separate buffer for the  word under 
-" cursor and displays information about it.
+" plugin that opens a help file (a note) in a separate buffer for the  word 
+" under the cursor and displays information about it. The help file can 
+" be created, updated and deleted by the user on the spot.
 "
 " Usually the word belongs to a context, and same word can belong to different
 " contexts, so it can have a definition for each context it belongs to.
@@ -59,10 +60,6 @@
 " simultaneously:
 " http://www.vim.org/scripts/script.php?script_id=1238
 "
-"TODO: figure out how to change Keyword class in order to introduce contexts
-" figure how if context is a table with different context columns, if it's a
-" one to many or many to one relation, etc.
-
 
 
 if !has('python')
@@ -93,7 +90,7 @@ endif
 " :call Help_buffer(expand("<cword>"))   " call fct with word under the cursor 
 
 if !exists(":HelperSave")
-  command -nargs=* HelperSave call s:Helper_save(<f-args>)   
+  command -nargs=? HelperSave call s:Helper_save(<f-args>)   
   " -nargs=*    Any number of arguments are allowed (0, 1, or many)
   " -nargs=?    zero or one argument
 endif
@@ -168,8 +165,8 @@ EOF
 endfunction
 
 
-function! s:Helper_save(context)             " fct has a variable number of args
-"function! s:Helper_save(...)             " fct has a variable number of args
+"function! s:Helper_save(context)             " fct has a variable number of args
+function! s:Helper_save(...)             " fct has a variable number of args
     " SYNOPSIS
     "   Helper_save()
     "   Helper_save(context)
@@ -178,37 +175,24 @@ function! s:Helper_save(context)             " fct has a variable number of args
     " # TODO: do we need ! ?!? 
     " This way, we reload for each subsequent function call
     if !exists("g:loaded_Help_buffer")
-      " TODO: is this working?
       echo "There is nothing to save. HelperSave needs to be called after Helper command."
       return 
     endif
 
-    "if a:0 == 1
-    "    " get first positional argument
-    "    let context = a:1      
+    if a:0 == 1
+        " get first positional argument
+        let context = a:1      
     "    let test_answer = ''
     "elseif a:0 == 2
     "    let context = a:1
     "    let test_answer = a:2
-    "else
-    "    let context = ''
+    else
+        let context = ''
     "    let test_answer = ''
-    "endif
-"    try
-"      " get first positional argument
-"      let context = a:1      
-"      " python imports from vim functions run previously are still available, 
-"      " as well as the variables defined.
-"      python context = gotoword.vim.eval("context")
-"      python context = unicode(context).lower()
-"    "catch /^Vim\%((\a\+)\)\=:E121/
-"    catch /.*/           " catch all errors that appear when no args exist
-"      python context = ''
-"    endtry
+    endif
 
 python << EOF
-#context = gotoword.vim.eval("context")
-context = gotoword.vim.eval("a:context")
+context = gotoword.vim.eval("context")
 # for testing purposes, context that is "" in vim will be transformed to '' 
 # (empty string) in python; 
 if context == '""':
@@ -217,7 +201,7 @@ context = unicode(context.strip()).lower()
 #test_answer = gotoword.vim.eval("test_answer")
 #test_answer = test_answer.strip().lower()
 test_answer = ""
-
+# TODO: get rid of test_answer
 app.helper_save(context, test_answer)
 
 EOF
@@ -289,49 +273,18 @@ python <<EOF
 
 import vim
 import sys
-import os.path
-from glob import glob
 
 # --------------------------------
 # Add our plugin to the path
 # --------------------------------
-# TODO: following paths are enough, move them to settings and logger as well, and 
-# delete the other bunch of paths
-
 gotoword_plugin_path = vim.eval('expand("<sfile>:h")')
 # :help sfile
-#venv_packages = os.path.join(gotoword_plugin_path, 'virtualenv/lib/python*/site-packages/')
-#django_path = glob(venv_packages)[0]
 sys.path.insert(1, gotoword_plugin_path)
-#sys.path.insert(2, django_path)
-
-# DEBUG
-# python print vim.eval('expand("<sfile>:h")') + '/gotoword'
-# python print sys.path
-
-#try:
-#    # move the init stuff in __init__.py so that it takes place automatically 
-#    # when doing:
-#    # >>> import gotoword
-#    # django related settings must be imported before utils or gotoword:
-#    from gotoword import settings
-#    settings.setup(settings.DATABASE)
-#    #from gotoword import gotoword, utils
-#    from gotoword import gotoword
-#    from gotoword import utils2 as utils
-#except ImportError:
-#    import settings
-#    settings.setup(settings.DATABASE)
-#    #import gotoword, utils
-#    import gotoword
-#    import utils2 as utils
-
 
 from gotoword import settings
 settings.setup(settings.DATABASE)
-#from gotoword import gotoword, utils
 from gotoword import gotoword
-from gotoword import utils2 as utils
+from gotoword import utils
 
 
 app = gotoword.App()

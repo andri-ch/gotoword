@@ -3,7 +3,7 @@
 ### System libraries ###
 import logging
 import logging.handlers
-import os.path
+#import os.path
 #import threading
 #import time
 #import sys
@@ -146,23 +146,21 @@ so this script is under test and should accept test input using Vim's input
 functions."""
 TESTING = True if logger.handlers[1].sock else False
 
-from settings import (VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE,
-                      PLUGIN_PATH, SCRIPT, SOURCE_DIR, DATABASE)
-import utils2 as utils
+from settings import (PKG_PATH, VIM_PLUGIN_PATH, DJANGO_PATH, SCRIPT,
+                      HELP_BUFFER, DATABASE)
+import utils
 # TODO: Can sys.path.insert() be avoided if we have a proper __init__.py file in the
 # package?
 
 logger.debug("Following constants are defined: \n"
-             "\t\t VIM_FOLDER: %s \n"
-             "\t\t PLUGINS_FOLDER: %s \n"
-             "\t\t PLUGIN_NAME: %s \n"
-             "\t\t PYTHON_PACKAGE: %s \n"
-             "\t\t PLUGIN_PATH: %s \n"
+             "\t\t PKG_PATH: %s \n"
+             "\t\t VIM_PLUGIN_PATH: %s \n"
+             "\t\t DJANGO_PATH: %s \n"
              "\t\t SCRIPT: %s \n"
-             "\t\t SOURCE_DIR: %s \n"
+             "\t\t HELP_BUFFER: %s \n"
              "\t\t DATABASE: %s \n" %
-             (VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE,
-             PLUGIN_PATH, SCRIPT, SOURCE_DIR, DATABASE),
+             (PKG_PATH, VIM_PLUGIN_PATH, DJANGO_PATH, SCRIPT, HELP_BUFFER,
+             DATABASE),
              extra={'className': ""}
              )
 
@@ -205,8 +203,7 @@ class App(object):
     # create a help_buffer that will hold info retrieved from database, etc.
     # but prevent vim to create buffer in current working dir, by setting an
     # explicit path;
-    help_buffer_name = os.path.join(VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME,
-                                    PLUGIN_NAME + '_buffer')
+    help_buffer_name = HELP_BUFFER
     # help_buffer is created on the fly, in memory, it doesn't exist on disk,
     # but we specify a full path as its name
 
@@ -656,7 +653,7 @@ class EntryState(object):
             logger.debug("kw and not context", extra={'className': strip(self.__class__)})
             # TODO: app.default_context -> actually, it should be keysword's
             # existing context,
-            app.keyword_context = app.default_context
+            app.keyword_context = kw.current_context
             return UpdateKeywordState()
             #return None
         else:
@@ -738,6 +735,7 @@ class NewKeywordState(object):
             context = utils.Context.objects.get(name="default")
         app.keyword = utils.create_keyword(app.word, context,
                                            app.vim_wrapper.help_buffer)
+        app.keyword.current_context = context
         logger.debug('echomsg "keyword %s saved into context %s"' %
                      (app.keyword.name, context.name),
                      extra={'className': strip(self.__class__)})
