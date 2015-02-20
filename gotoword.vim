@@ -168,7 +168,8 @@ EOF
 endfunction
 
 
-function! s:Helper_save(...)             " fct has a variable number of args
+function! s:Helper_save(context)             " fct has a variable number of args
+"function! s:Helper_save(...)             " fct has a variable number of args
     " SYNOPSIS
     "   Helper_save()
     "   Helper_save(context)
@@ -182,17 +183,17 @@ function! s:Helper_save(...)             " fct has a variable number of args
       return 
     endif
 
-    if a:0 == 1
-        " get first positional argument
-        let context = a:1      
-        let test_answer = ''
-    elseif a:0 == 2
-        let context = a:1
-        let test_answer = a:2
-    else
-        let context = ''
-        let test_answer = ''
-    endif
+    "if a:0 == 1
+    "    " get first positional argument
+    "    let context = a:1      
+    "    let test_answer = ''
+    "elseif a:0 == 2
+    "    let context = a:1
+    "    let test_answer = a:2
+    "else
+    "    let context = ''
+    "    let test_answer = ''
+    "endif
 "    try
 "      " get first positional argument
 "      let context = a:1      
@@ -206,20 +207,18 @@ function! s:Helper_save(...)             " fct has a variable number of args
 "    endtry
 
 python << EOF
-context = gotoword.vim.eval("context")
+#context = gotoword.vim.eval("context")
+context = gotoword.vim.eval("a:context")
 # for testing purposes, context that is "" in vim will be transformed to '' 
 # (empty string) in python; 
 if context == '""':
     context = ''       # empty string => False in a boolean context
 context = unicode(context.strip()).lower()
-test_answer = gotoword.vim.eval("test_answer")
-#python test_answer = unicode(test_answer).lower()
-test_answer = test_answer.strip().lower()
+#test_answer = gotoword.vim.eval("test_answer")
+#test_answer = test_answer.strip().lower()
+test_answer = ""
 
 app.helper_save(context, test_answer)
-# OR
-# gotoword.helper_save(context, gotoword.store)
-# TODO: gotoword.helper_save(keyword, context, gotoword.store)
 
 EOF
 endfunction
@@ -300,30 +299,39 @@ from glob import glob
 # delete the other bunch of paths
 
 gotoword_plugin_path = vim.eval('expand("<sfile>:h")')
-#python sys.path.append(vim.eval('expand("<sfile>:h")') + '/gotoword')
 # :help sfile
-venv_packages = os.path.join(gotoword_plugin_path, 'virtualenv/lib/python*/site-packages/')
-django_path = glob(venv_packages)[0]
+#venv_packages = os.path.join(gotoword_plugin_path, 'virtualenv/lib/python*/site-packages/')
+#django_path = glob(venv_packages)[0]
 sys.path.insert(1, gotoword_plugin_path)
-sys.path.insert(2, django_path)
+#sys.path.insert(2, django_path)
 
 # DEBUG
 # python print vim.eval('expand("<sfile>:h")') + '/gotoword'
 # python print sys.path
 
-try:
-    # django related settings must be imported before utils or gotoword:
-    from gotoword import settings
-    settings.setup(settings.DATABASE)
-    #from gotoword import gotoword, utils
-    from gotoword import gotoword
-    from gotoword import utils2 as utils
-except ImportError:
-    import settings
-    settings.setup(settings.DATABASE)
-    #import gotoword, utils
-    import gotoword
-    import utils2 as utils
+#try:
+#    # move the init stuff in __init__.py so that it takes place automatically 
+#    # when doing:
+#    # >>> import gotoword
+#    # django related settings must be imported before utils or gotoword:
+#    from gotoword import settings
+#    settings.setup(settings.DATABASE)
+#    #from gotoword import gotoword, utils
+#    from gotoword import gotoword
+#    from gotoword import utils2 as utils
+#except ImportError:
+#    import settings
+#    settings.setup(settings.DATABASE)
+#    #import gotoword, utils
+#    import gotoword
+#    import utils2 as utils
+
+
+from gotoword import settings
+settings.setup(settings.DATABASE)
+#from gotoword import gotoword, utils
+from gotoword import gotoword
+from gotoword import utils2 as utils
 
 
 app = gotoword.App()

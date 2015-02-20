@@ -5,11 +5,13 @@ import imp
 import os
 
 
+# TODO: load_src if it's not needed anymore
 def load_src(name, fpath):
     """load_src("util", "../util.py")"""
     return imp.load_source(name, os.path.join(os.path.dirname(__file__), fpath))
 
 
+# TODO: remove custom importer if it's not needed anymore
 def custom_importer(name, pathname):
     # Fast path: see if the module has already been imported.
     try:
@@ -267,3 +269,41 @@ def create_vim_list(values):
     return '[%s]' % ', '.join(values_with_quotes)
     # as a one liner:
     #return '[%s]' % ', '.join("\"%s\"" % elem for elem in values)
+
+
+#def toggle_readonly(f):
+#    """decorator used to set buffer options inside vim editor"""
+#    def wrapper_readonly(obj, *args, **kwargs):
+#        # if called repeatedly, remove readonly flag set by previous calls
+#        vim.command("set noreadonly")
+#        # the format of the log message below takes into account that this is a
+#        # wrapper only for __setitem__() methods that are found in a mapping
+#        # object; I probably should reformat this message
+#        logger.debug("obj: %s, index: %s , value: %s " % (obj, args[0], args[1]),
+#                     extra={'className': ''}
+#                     )
+#        res = f(obj, *args, **kwargs)
+#        vim.command("set readonly")
+#        # by setting buffer readonly, we want user to prevent from saving it
+#        # on harddisk with :w cmd, instead we want user to update the
+#        # database with HelperSave or HelperUpdate vim cmd
+#        return res
+#    return wrapper_readonly
+
+
+#def toggle_activate(f):
+#    """
+#    Activate/focus the helper buffer and then activate/focus again the last
+#    used buffer.
+#    """
+#    def wrapper_activate(obj, *args, **kwargs):
+#        # store old buffer
+#        user_buf_nr = get_active_buffer()
+#        # activate the buffer whose index is obj.index so we can set some
+#        # buffer options
+#        vim.command("buffer! %s" % obj.index)
+#        f(obj, *args, **kwargs)
+#        # f(obj, ...) because we need to pass ALL args to wrapped function;
+#        # make the old buffer active again
+#        vim.command("buffer! %s" % user_buf_nr)
+#    return wrapper_activate

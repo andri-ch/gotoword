@@ -6,7 +6,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import os
 import os.path
 import shutil
-import inspect
+#import inspect
 
 import unittest
 
@@ -172,7 +172,7 @@ class TestMain(unittest.TestCase):
 
     def test_create_keyword_add_info_from_buffer(self):
         # buf simulates contents retrieved from a vim buffer with buf[:]
-        buf = """<Rule>:
+        """<Rule>:
         canvas:
         # red color
         Color:
@@ -225,7 +225,11 @@ class TestMain(unittest.TestCase):
         self.assertEqual(u'canvas', kw.values()[0]['name'])
 
     def copy_database_for_inspection(self, test_name):
-        '''Dump a copy of the database for inspection with other tools.'''
+        '''Dump a copy of the database for inspection with other tools.
+        One way to set 'test_name' automatically is by doing:
+            >>> func_name = inspect.stack()[0][3]
+            >>> self.copy_database_for_inspection(func_name + ".db")
+        '''
         destination = os.path.join(os.path.dirname(self.database_name),
                                    test_name)
         shutil.copy(self.database_name, destination)
@@ -239,14 +243,12 @@ class TestContext(unittest.TestCase):
     pass
 
 
-
 #if options.syncdb:
 #    # run a simple command - here syncdb - from the management suite
 #    call_command('syncdb')
 #elif options.repl:
 #    # start the shell, access to your models through import standalone.models
 #    call_command('shell')
-
 
 # run all tests:
 if __name__ == '__main__':          # when running as a script
@@ -281,7 +283,7 @@ else:                                # when it is being imported
         if error.errno != 2:
             raise
 
-    print("create db %s" % database_name)
+    print("create a fresh test db %s" % database_name)
     call_command('syncdb')
 
     kivy = Context.objects.create(
@@ -349,4 +351,3 @@ else:                                # when it is being imported
 
 
     # Display all
-

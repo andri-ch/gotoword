@@ -4,6 +4,8 @@
 import logging
 import logging.handlers
 import os.path
+#import threading
+#import time
 #import sys
 
 try:
@@ -37,7 +39,7 @@ def set_up_logging(default_level):
     PORT = logging.handlers.DEFAULT_TCP_LOGGING_PORT
     socket_handler = logging.handlers.SocketHandler(IP, PORT)
     # socket_handler is used to send logs to a socket server in the functional
-    # tests file -> might crash if not testing?!
+    # tests file
     sock_msg_format = "%(message)s"
     socket_formatter = logging.Formatter(sock_msg_format)
     socket_handler.setFormatter(socket_formatter)
@@ -139,6 +141,10 @@ logger.debug("SCRIPT STARTED", extra={'className': ""}),
 #             extra={'className': ""}
 #             )
 #logger.info("emit_counter: %s" % logger.handlers[1].emit_counter, extra={'className': ""})
+"""Flag to indicate that a log server in functional tests file might be up,
+so this script is under test and should accept test input using Vim's input
+functions."""
+TESTING = True if logger.handlers[1].sock else False
 
 from settings import (VIM_FOLDER, PLUGINS_FOLDER, PLUGIN_NAME, PYTHON_PACKAGE,
                       PLUGIN_PATH, SCRIPT, SOURCE_DIR, DATABASE)
@@ -192,80 +198,6 @@ def strip(s):
     return repr(s).lstrip("<class '").rstrip("'>")
 
 
-def get_active_buffer():
-    """
-    get the current (active) vim buffer.
-    """
-    return vim.eval("winbufnr(0)")
-
-
-def toggle_activate(f):
-    """
-    Activate/focus the helper buffer and then activate/focus again the last
-    used buffer.
-    """
-    def wrapper_activate(obj, *args, **kwargs):
-        # store old buffer
-        user_buf_nr = get_active_buffer()
-        # activate the buffer whose index is obj.index so we can set some
-        # buffer options
-        vim.command("buffer! %s" % obj.index)
-        f(obj, *args, **kwargs)
-        # f(obj, ...) because we need to pass ALL args to wrapped function;
-        # make the old buffer active again
-        vim.command("buffer! %s" % user_buf_nr)
-    return wrapper_activate
-
-# TODO: Check if the user can :w to our help buffer
-#def toggle_readonly(f):
-#    """decorator used to set buffer options inside vim editor"""
-#    def wrapper_readonly(obj, *args, **kwargs):
-#        # if called repeatedly, remove readonly flag set by previous calls
-#        vim.command("set noreadonly")
-#        # the format of the log message below takes into account that this is a
-#        # wrapper only for __setitem__() methods that are found in a mapping
-#        # object; I probably should reformat this message
-#        logger.debug("obj: %s, index: %s , value: %s " % (obj, args[0], args[1]),
-#                     extra={'className': ''}
-#                     )
-#        res = f(obj, *args, **kwargs)
-#        vim.command("set readonly")
-#        # by setting buffer readonly, we want user to prevent from saving it
-#        # on harddisk with :w cmd, instead we want user to update the
-#        # database with HelperSave or HelperUpdate vim cmd
-#        return res
-#    return wrapper_readonly
-
-
-def database_operations(f):
-    """decorator used to open and close a database connection before each
-    call to the wrapped function.
-    The purpose of this decorator is to close the DB between operations
-    performend on DB with possibly large time gaps.
-    The user takes a lot of time on what definition to add to a kwd, so DB should
-    be closed during that time.
-    """
-    # pass decorated func's name, description to wrapper
-    #@functools.wraps
-    def wrapper_operations(*args, **kwargs):
-        # reopen database connection
-        #STORE._connection = STORE.get_database().connect()
-        logger.debug("store is open", extra={'className': ''})
-        # call decorated function
-        res = f(*args, **kwargs)
-        # close database connection
-        #STORE.close()
-        logger.debug("store is closed", extra={'className': ''})
-        return res
-    return wrapper_operations
-
-
-    # TODO:
-    # toggle_activate, toggle_readonly should be part of vim client server
-    # get_active_buffer, setup_help_buffer, open_window should be part of
-    # vim client.
-
-
 class App(object):
     """
     This is the main plugin app. Run App.main() method to launch it.
@@ -281,14 +213,15 @@ class App(object):
     def __init__(self, vim_wrapper=None):
         self.vim_wrapper = vim_wrapper
         self.word = None
+        # the current keyword which will be displayed in helper buffer
         self.keyword = None
         self.keyword_context = None
         # we are sure that 'default' context exists in DB
         self.default_context = utils.find_model_object('default',
                                                        utils.Context)
-        # the current keyword which will be displayed in helper buffer
-        logger.debug("plugin started from Vim with pid: %s" %
-                     os.getpid(), extra={'className': strip(self.__class__)})
+        # a list of strings (test answers) used when script is under test
+        self.test_answers = []
+        logger.debug("app init", extra={'className': strip(self.__class__)})
 
     #@log
     def main(self):
@@ -300,24 +233,11 @@ class App(object):
         self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
 
     @log
-    #@database_operations
     def helper_save(self, context, test_answer):
         """
         this function, if called twice on same keyword(first edit, then an update)
         should know that it doesn't need to create another keyword, just to update
         TODO: write a proper doc string
-        """
-        # bind to app for easier handling
-        self.context = context
-        self.test_answer = test_answer
-        # state strategy pattern:
-        self.state = EntryState()
-        self.saving = True
-        while self.saving:
-            self.state = self.state.evaluate(self, self.keyword, self.context, self.test_answer)
-            if self.state is None:
-                self.saving = False
-
 
         ### ALL COMBINATIONS ###
         # from the user's point of view - what he types when he executes :HelperSave [context]
@@ -391,9 +311,19 @@ class App(object):
 
         ## TODO: context.name? this will be an error if no context is defined whatsoever
         #print("Keyword and its definition were saved in %s context." % context.name)
+        """
+        # bind to app for easier handling
+        self.context = context
+        self.test_answer = test_answer
+        # state strategy pattern:
+        self.state = EntryState()
+        self.saving = True
+        while self.saving:
+            self.state = self.state.evaluate(self, self.keyword, self.context, self.test_answer)
+            if self.state is None:
+                self.saving = False
 
     @log
-    #@database_operations
     def helper_delete(self, keyword, context=None):
         """
         this function deletes from DB the keyword whose content in help_buffer
@@ -423,7 +353,6 @@ class App(object):
             print("Can't delete a word and its definition if it's not in the database.")
 
     @log
-    #@database_operations
     def helper_delete_context(self, context):
         "Deletes context from database."
         context = utils.Context.objects.get(name=context)
@@ -437,7 +366,6 @@ class App(object):
             print("Can't delete a context if it's not in the database.")
 
     @log
-    #@database_operations
     def helper_all_words(self):
         """
         List all keywords from database into help_buffer.
@@ -462,7 +390,6 @@ class App(object):
         self.vim_wrapper.help_buffer[:] = names
 
     @log
-    #@database_operations
     def helper_all_contexts(self):
         """
         List all contexts from database into help_buffer.
@@ -480,7 +407,6 @@ class App(object):
         self.vim_wrapper.help_buffer[:] = names
 
     @log
-    #@database_operations
     def helper_context_words(self, context):
         """
         Displays all keywords that have a definition belonging to this
@@ -505,7 +431,6 @@ class App(object):
         return words
 
     @log
-    #@database_operations
     def helper_word_contexts(self):
         """
         It is used for testing, it should not be available to the user.
@@ -530,6 +455,14 @@ class App(object):
             self.vim_wrapper.help_buffer[:] = [
                 "The keyword '%s' has information that doesn't belong to any "
                 "context" % kw.name]
+
+    def get_test_answer(self, obj):
+        try:
+            answer = self.test_answers.pop(0)
+            return answer
+        except IndexError:
+            logger.debug("no more test answers left",
+                         extra={'className': strip(obj.__class__)})
 
 
 class VimWrapper(object):
@@ -556,7 +489,7 @@ class VimWrapper(object):
         """
         # store current active buffer so that we can get back to it after we setup
         # our help_buffer
-        user_buf_nr = get_active_buffer()
+        user_buf_nr = self.get_active_buffer()
 
         # create a buffer without opening it in a window
         vim.command("badd %s" % buffer_name)
@@ -617,7 +550,6 @@ class VimWrapper(object):
         editor.command('call feedkeys("\<C-w>p")')
 
     @log
-    #@database_operations
     def update_buffer(self, word):
         """
         Updates an existing buffer with information about a
@@ -644,16 +576,22 @@ class VimWrapper(object):
             contexts = keyword.contexts.all()
             ctx_names = [ctx.name for ctx in contexts]
             ctx_names.sort()
+            # TODO: keyword.current_context should be set by user if keyword
+            # has more contexts
+            keyword.current_context = contexts[0]
             logger.debug("word: %s keyword: %s contexts: %s" %
                          (word, keyword, ctx_names),
                          extra={'className': strip(self.__class__)})
             # add a title line at the top;
             # TODO: is the title line removed when kw is updated?
+            # maybe it's best to write the content than insert at index 0 the
+            # title line, after a md5sum is made, and when reading data, check
+            # that title line hasn't changed by checking the md5sum again...
             self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
                                      (keyword.name, "; ".join(ctx_names))]
             # load content in buffer, previous content is deleted
             ## for now, only content from first context is displayed:
-            content_main_ctx = keyword.data_set.get(context=contexts[0])
+            content_main_ctx = keyword.data_set.get(context=keyword.current_context)
             self.help_buffer[1:] = content_main_ctx.info.splitlines()
         else:
             # keyword doesn't exist, prepare buffer to be filled with user content
@@ -669,6 +607,13 @@ class VimWrapper(object):
             keyword = None
         return keyword
 
+    @staticmethod
+    def get_active_buffer():
+        """
+        get the current (active) vim buffer.
+        """
+        return vim.eval("winbufnr(0)")
+
 
 class EntryState(object):
     """Makes an initial evaluation of keyword & context and decides which is
@@ -678,10 +623,10 @@ class EntryState(object):
         pass
 
     @log
-    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
         # kw is None if no keyword exists in database
         if (not kw) and (not context):
+            logger.debug("not kw and not context", extra={'className': strip(self.__class__)})
             # check out
             # http://www.diveintopython.net/power_of_introspection/and_or.html
             # for The peculiar nature of 'and' and 'or'
@@ -689,15 +634,10 @@ class EntryState(object):
             # user
             # debug flags:
             app.kw = kw
-            app.new_context0 = context
-            app.bol = (not kw) and (not context)
-            logger.debug("not kw and not context", extra={'className': strip(self.__class__)})
             return ReadContextState()
         elif (not kw) and context:
+            logger.debug("not kw and context", extra={'className': strip(self.__class__)})
             # debug flags:
-            app.kw2 = kw
-            app.new_context1 = context
-            app.bol2 = context and (not kw)
             app.new_context = True
             # case when kw doesn't exist in DB and context was given by user;
             # context was supplied by user to save keyword in that context;
@@ -705,17 +645,8 @@ class EntryState(object):
             ctx = utils.find_model_object(context, utils.Context)
             # if context not in DB, ctx will be None, create a new context
             if not ctx:
-                # TODO: prompt user that context doesn't exist and must be
-                # created; if yes:
-                # save it to DB
-                app.new_context2 = True
-                ctx = utils.Context.objects.create(name=context)
-#                STORE.add(ctx)
-#                STORE.commit()
-            # transform app.context which is just a string into a Storm object
-            # from DB
+                return CreateContextState()
             app.context = ctx
-            logger.debug("not kw and context", extra={'className': strip(self.__class__)})
             # continue with creating and saving a keyword
             return NewKeywordState()
         elif kw and (not context):
@@ -723,6 +654,8 @@ class EntryState(object):
             # kw exists in db, context was not given by user -> update kw info
             # to same context, if context exists, or to no context at all
             logger.debug("kw and not context", extra={'className': strip(self.__class__)})
+            # TODO: app.default_context -> actually, it should be keysword's
+            # existing context,
             app.keyword_context = app.default_context
             return UpdateKeywordState()
             #return None
@@ -738,95 +671,67 @@ class EntryState(object):
 class ReadContextState(object):
     """Prompts user to supply context."""
     @log
-    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
-        # we keep this code in case we want to drop inputlist() for reading
-        # user input
-        # input(), inputlist(), getchar() are all Vim blocking methods, cannot
-        # be tested well...
-
-        #print("Do you want to specify a context that this definition of the word "
-        #      "applies in?")
-        #message = "[Y]es define it    [N]o do not define it    [A]bort"
-        ### following vim cmds are needed because:
-        ###   http://vim.wikia.com/wiki/User_input_from_a_script
-        #vim.command('call inputsave()')
-        ## put vim cursor here:
-        #vim.command("let user_input = input('" + message + ": ')")
-        #vim.command('call inputrestore()')
-        #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
-        #answer = vim.eval('user_input')
+         #input(), inputlist(), getchar() are all Vim blocking methods, cannot
+         #be tested well...
 
         # TODO: put it in a while loop, like any prompt should be
         # eg: while not answer in ('0', '1', '2')
-        answer = vim.eval("""inputlist(["Do you want to specify a context that this definition of the word applies in?", \
-                "0. Yes, I will provide a context [0 and press <Enter>]", \
-                "1. No, I won't provide a context - use the default one [1 and press <Enter>]", \
-                "2. Abort [2 and press <Enter>]" ])
-                """)
-        # TODO: provide another option for 'Yes, I will provide an existing
-        # context'
 
+        vim.command("""let user_input = inputlist(["Do you want to specify a context that this definition of the word applies in?", \
+                "1. Yes, I will provide a context [1 and press <Enter>]", \
+                "2. No, I won't provide a context - use the default one [2 and press <Enter>]", \
+                "3. Abort [3 and press <Enter>]" ])
+                """)
         # inputlist() is blocking the prompt, waiting for a key from user
-        # inputlist() returns '0' if no option is chosen or if first option is
+        # inputlist() returns '0' if no option is chosen or 1 if first option is
         # chosen
 
-        #print("Do you want to specify a context that this definition of the word "
-        #      "applies in?")
-        #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
-        #message = "[Y]es define it    [N]o do not define it    [A]bort"
-        #print(message)
-        #vim.command('echo ""')     # make prompt pass to next line, for pretty printing
-        ##answer = vim.eval('getchar(0)')
-        ## the following snippet is taken from here:
-        ## http://stackoverflow.com/questions/4189239/vim-script-input-function-that-doesnt-require-user-to-hit-enter
-        ## snippet is needed because 8 bit characters are converted to numbers
-        ## by getchar()
-        #vim.command('exe "let c = getchar()"')
-        #vim.command("exe \"if c =~ '^\d\+$' | let c = nr2char(c) | endif\"")
-        ## allow multiple commands on same line with |
-        ##vim.command('exe "let c = nr2char(c) | endif"')
-        ##vim.command('exe "endif"')
-        #answer = vim.eval('c')
-
-        #answer = vim.eval('confirm("Do you want to define a context that this definition of the word applies in?", "&Yes\n&No\n&Cancel")')
-        answer = answer.strip().lower()
+        if TESTING:
+            answer = app.get_test_answer(self)
+        else:
+            answer = vim.eval('user_input')
+            answer = answer.strip().lower()
         # use test_answer if it is supplied (when testing)
-        answer = test_answer if test_answer else answer
+        #answer = test_answer if test_answer else answer
+
         # attach this local variable to our app
         app.answer = answer
+        logger.debug("answer: %s" % answer,
+                     extra={'className': strip(self.__class__)})
         #if answer.startswith('1'):
         #if answer.startswith(' 1'):
         #if answer == '1' or answer.startswith('y'):
-        if answer == '0' or answer.startswith('y'):
+        if answer == '1' or answer.startswith('y'):
             # read context ....
             # debug:
             vim.command('echo "\n"')
             vim.command('echomsg "You entered: [\"%s\"]"' % app.answer)
             return CheckContextState()
             #return NewKeywordState()
-        elif answer.startswith('1') or answer.startswith('n'):
+        elif answer.startswith('2') or answer.startswith('n'):
             app.nocontextno = True        # debug
             return NewKeywordState()
         #elif answer.startswith('0') or answer.startswith('a'):
-        elif answer.startswith('2') or answer.startswith('a'):
+        elif answer.startswith('3') or answer.startswith('a'):
             # Abort
-            vim.command('echo ""')     # make prompt pass to next line ???!, for pretty printing
+            # make prompt pass to next line ???!, for pretty printing
+            vim.command('echo ""')
             vim.command('echomsg "You entered: [\"%s\"] \n"' % answer)
-            vim.command('echo "You entered test answer: [\"%s\"]"' % test_answer)
-            vim.command('echo ""')     # make prompt pass to next line, for pretty printing
+            #vim.command('echo "You entered test answer: [\"%s\"]"' % test_answer)
+            # make prompt pass to next line, for pretty printing
+            vim.command('echo ""')
             #vim.command('echo "None is returned"')
             return None
         else:
             # user made a mistake, repeat whole process
-            vim.command('echomsg "Invalid option! Type a number from 0 to 2"')
+            vim.command('echomsg "Invalid option! Type a number from 1 to 3"')
             return self
 
 
 class NewKeywordState(object):
     "Creates a keyword and stores it to database."
     @log
-    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
         if not context:
             # use the default context
@@ -849,11 +754,13 @@ class CheckContextState(object):
     keyword and we add it to the context.
     """
     @log
-    #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
         # capture from stdin the context name
         message = "Enter a one word context name: "
-        answer = get_user_input(message, test_answer)
+        if TESTING:
+            answer = app.get_test_answer(self)
+        else:
+            answer = get_user_input(message, test_answer)
 
         # validate it
         context = utils.find_model_object(answer, utils.Context)
@@ -878,11 +785,13 @@ class CheckContextState(object):
 class CreateContextState(object):
     """TODO: add description."""
     @log
-    #@database_operations   # maybe I should remove these for the evaluate fcts
     def evaluate(self, app, kw, context, test_answer):
         # capture from stdin the short description of the context
         message = "Enter a short description of the context you just defined: \n"
-        answer = get_user_input(message, test_answer)
+        if TESTING:
+            answer = app.get_test_answer(self)
+        else:
+            answer = get_user_input(message, test_answer)
 
         context = utils.Context.objects.create(name=context,
                                                description=answer)
@@ -892,16 +801,28 @@ class CreateContextState(object):
                      extra={'className': strip(self.__class__)})
         app.context = context
         #return None
-        return NewKeywordState()
+        if kw:
+            # user added info for keyword for a new context
+            return UpdateKeywordState()
+        else:
+            return NewKeywordState()
 
 
 class UpdateKeywordState(object):
     """Updates the information field of a keyword. No states follow after
     this one."""
     @log
-    #@database_operations
     def evaluate(self, app, kw, context, test_answer):
-        utils.update_keyword(kw, app.keyword_context,
+        if context:
+            # user wants to add info in another context than the default one
+            # check that given context exists
+            ctx = utils.find_model_object(context, utils.Context)
+            # if context not in DB, ctx will be None, create a new context
+            if not ctx:
+                return CreateContextState()
+            current_context = ctx
+        current_context = kw.current_context
+        utils.update_keyword(kw, current_context,
                              app.vim_wrapper.help_buffer)
         vim.command('echomsg "Info field of keyword \"%s\" updated"' % kw.name)
         return None
@@ -909,16 +830,17 @@ class UpdateKeywordState(object):
 
 def get_user_input(message, test_answer):
     "Returns the user input from vim, displaying a message at the prompt."
-    if test_answer:
-        answer = unicode(test_answer)
-    else:
-        vim.command('call inputsave()')
-        vim.command("let user_input = input('%s')" % message)
-        vim.command('call inputrestore()')
-        answer = vim.eval('user_input')
-        # sanitize it (strip, lowercase, unicode it, etc.)
-        answer = unicode(answer.strip().lower())
+    #if test_answer:
+    #    answer = unicode(test_answer)
+    #else:
+    vim.command('call inputsave()')
+    vim.command("let user_input = input('%s')" % message)
+    vim.command('call inputrestore()')
+    answer = vim.eval('user_input')
+    # sanitize it (strip, lowercase, unicode it, etc.)
+    answer = unicode(answer.strip().lower())
     return answer
+
 
 #### MAIN ###
 

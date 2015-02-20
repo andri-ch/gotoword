@@ -1,6 +1,6 @@
-#!/usr/bin/python
-# -*- coding: utf-8 -*-
 #!/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/bin/python
+# -*- coding: utf-8 -*-
+#!/usr/bin/python
 
 """
 This file contains functional tests for "gotoword" python app.
@@ -35,6 +35,7 @@ import threading
 import asyncore
 import unittest
 unittest.defaultTestLoader.sortTestMethodsUsing = None
+import shutil
 
 # third party modules
 #import pytest
@@ -45,7 +46,11 @@ from vimrunner import Server
 #import utils2 as utils
 #import logserver
 import asyncorelog
-
+#import gotoword
+#print(dir(gotoword))
+#from gotoword import settings
+#DATABASE = settings.DATABASE
+#DATABASE = os.path.dirname(os.path.abspath("../../keywords.db"))
 
 SERVER = 'gotoword'
 TEST_FILE = 'ft_test_text'
@@ -150,9 +155,10 @@ class TestGotoword(unittest.TestCase):
         # attributes will be added to self.
         cls.client = cls.vim.start_in_other_terminal()
         cls.client.add_plugin(PLUGIN_PATH, SCRIPT)
-            # edit test file
+        # edit test file
         cls.client.edit(os.path.join(PLUGIN_PATH, 'gotoword', 'test',
                                      TEST_FILE))
+
         buffers = cls.client.command('ls!')
         # buffers is similar to:
         # '1 %a   "~/.vim/andrei_plugins/gotoword/gotoword/test/ft_test_text" line 31\n
@@ -310,8 +316,14 @@ class TestGotoword(unittest.TestCase):
         #  call HelperSave with no context
         ## -------------------------
         # test when user calls :HelperSave with no arguments, we simulate an
-        # empty argument with "" and we simulate user chose choice number 1:
-        self.client.command('HelperSave "" 0')
+        # empty argument with "" and we simulate user chose choice number 1;
+        # populate test_answers with answers that we know the app would need,
+        # the first appended answer is used first by the app (FIFO):
+        self.client.command('py app.test_answers.append("1")')
+        self.client.command('py app.test_answers.append("functional tests")')
+        self.client.command('py app.test_answers.append("created during '
+                            'functional tests")')
+        self.client.command('HelperSave ""')
         # because in Vim it is difficult to simulate user input when
         # unit testing, the above solution was chosen. The ideal test situation
         # would have been:
@@ -335,20 +347,17 @@ class TestGotoword(unittest.TestCase):
         self.logger.debug("word_contexts: %s" % word_contexts,
                           extra={'className': ""})
         #time.sleep(0.5)
-        assert ('0' in word_contexts)
+        assert ('functional tests' in word_contexts)
         # revert
         self.client.command('HelperDelete')
         # delete the context given too
-        self.client.command('HelperDeleteContext 0')
+        self.client.command('HelperDeleteContext functional tests')
         time.sleep(0.2)
 
     #@unittest.skip("")
     def test_005_HS_new_kw_no_context_but_existing_one_given_when_prompted(self):
+        #self.client.command('HelperSave "functional tests"')
         pass
-        # TODO: make HelperSave take a test answer other than 0, make it take
-        # multiple test answers, for each stage (maybe a list or a dict)
-        # it should be an immutable container, to mimic that stages are not
-        # mutable
 
     #@unittest.skip("")
     def test_006_HelperDelete_on_current_keyword(self):
@@ -365,11 +374,9 @@ class TestGotoword(unittest.TestCase):
 
     #@unittest.skip("")
     def test_007_HelperSave_new_keyword_no_context_not_given_when_prompted(self):
-        # THIS TEST WILL FAIL BECAUSE SAME TEST ANSWER FROM PREVIOUS Test still
-        # exists
 
         ## -------------------------
-        #  call HelperSave with no context and user chooses choice 1
+        #  call HelperSave with no context and user chooses choice 2
         # which means he wants to provide no context, but save the keyword
         # anyway
         ## -------------------------
@@ -380,7 +387,8 @@ class TestGotoword(unittest.TestCase):
         # make sure that Vim has caught up with the stage/state of this test
         self.delay("test007-fixture")
 
-        self.client.command('HelperSave "" 1')
+        self.client.command('py app.test_answers.append("2")')
+        self.client.command('HelperSave ""')
         self.delay("test007-after helpersave", 0.25)
         ## check definition and keyword are stored to database
         all_words = self.get_all_keywords(self.buffer_index)
@@ -405,7 +413,9 @@ class TestGotoword(unittest.TestCase):
                           extra={'className': ""})
         self.keyword_fixture('new kw no context but cancel', 'rgb',
                              self.buffer_index, self.buffer_name)
-        self.client.command('HelperSave "" 2')
+        self.client.command('py app.test_answers.append("3")')
+        self.client.command('HelperSave ""')
+        self.delay("test008-HelperSave")
         ## check definition and keyword are not stored to database
         all_words = self.get_all_keywords(self.buffer_index)
         assert ('rgb' not in all_words)
@@ -425,9 +435,6 @@ class TestGotoword(unittest.TestCase):
         context = "kivy"
         self.client.command('HelperSave %s' % context)
         self.delay("test009-after helpersave", 0.5)
-        # Can be deleted?
-        # we don't have a prompt for now
-        #self.client.type("\<CR>")
         ctx_words = self.get_context_keywords(self.buffer_index, context)
         assert ('rgb' in ctx_words)
 
@@ -447,11 +454,17 @@ class TestGotoword(unittest.TestCase):
 
         ## we save again the word 'rgb', but we supply a context that doesn't
         # exist yet in database
-        context = "newcontext"
+        self.client.command('py app.test_answers.append("created during '
+                            'functional tests")')
+        context = "functional tests"
         self.client.command('HelperSave %s' % context)
         self.delay("test010-after helpersave", 0.5)
         ctx_words = self.get_context_keywords(self.buffer_index, context)
         assert ('rgb' in ctx_words)
+
+        # dump database
+        #test_name = inspect.stack()[0][3]
+        #self.copy_database_for_inspection(test_name, DATABASE)
 
         # delete 'rgb'
         self.client.command('HelperDelete')
@@ -472,28 +485,40 @@ class TestGotoword(unittest.TestCase):
         kword = 'rgb'
         self.keyword_fixture('update_info_for_keyword_with_existing_context',
                              kword, self.buffer_index, self.buffer_name)
+        time.sleep(0.3)
+        context = "functional tests"
+        self.client.command('py app.test_answers.append("test description of '
+                            'functional tests")')
+        self.client.command('HelperSave "%s"' % context)
+        self.delay("test011-HelperSave")
+        # update info
         self.client.write_buffer("line('$') + 1",
                                  "test update - add after last line")
-        time.sleep(0.3)
-        self.client.command('HelperSave "" 0')
-        time.sleep(0.1)
-
+        self.client.command('HelperSave')
+        self.delay("test011-HelperSave to update")
         #self.client.command('Helper')
         # check info is updated, so first locate it in current document
         line_nr = self.client.search(kword, flags='w')
         assert 0 != line_nr
 
         self.client.command('Helper')
-        time.sleep(0.1)
+        self.delay("test011-Helper")
         # focus helper buffer, because read_buffer() acts on current buffer
 
         info = self.client.read_buffer("'$'", buf=self.buffer_index)
-        time.sleep(0.2)       # might be obsolete
+        #time.sleep(0.2)       # might be obsolete
         # debug in Vim
         #self.client.command('py app.info = "%s"' % info)
         assert ("test update - add after last line" == info)
         # delete 'rgb'
         self.client.command('HelperDelete')
+        self.delay("test011-HelperDelete")
+
+        # delete context
+        self.client.command('HelperDeleteContext %s' % context)
+        self.delay("test011-HelperDeleteContext")
+        all_contexts = self.get_all_contexts(self.buffer_index)
+        assert (context not in all_contexts)
 
     #@unittest.skip("")
     def test_012_HelperAllContexts(self):
@@ -503,6 +528,7 @@ class TestGotoword(unittest.TestCase):
         self.logger.debug("Executing function %s " % inspect.stack()[0][3],
                           extra={'className': ""})
         all_contexts = self.get_all_contexts(self.buffer_index)
+        self.delay("test012-all_contexts")
         # test at least one context exists
         # TODO: contexts should be retrieved from DB and test for equality
         # between the two
@@ -665,6 +691,16 @@ class TestGotoword(unittest.TestCase):
         # plugin).
         # CTRL-W p   Go to previous (last accessed) window.
         editor.command('call feedkeys("\<C-w>p")')
+
+    def copy_database_for_inspection(self, test_name, database):
+        '''Dump a copy of the database for inspection with other tools.
+        One way to set 'test_name' automatically is by doing:
+            >>> func_name = inspect.stack()[0][3]
+            >>> self.copy_database_for_inspection(func_name + ".db")
+        '''
+        destination = os.path.join(os.path.dirname(database),
+                                   test_name)
+        shutil.copy(database, destination)
 
 
 if __name__ == '__main__':
