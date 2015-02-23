@@ -31,7 +31,7 @@ DJANGO_PATH = glob.glob(virtualenv_packages)[0]
 sys.path.insert(2, DJANGO_PATH)
 
 # load django-standalone (can find it on PyPI)
-from standalone.conf import settings
+import standalone.conf
 # use call_command to migrate/syncdb right after this app(plugin) is installed
 #from django.core.management import call_command
 
@@ -43,7 +43,7 @@ DATABASE = os.path.join(VIM_PLUGIN_PATH, 'keywords.db')
 def setup(db='test.db', engine='django.db.backends.sqlite3'):
     """Calls django's settings() which must be called only once per project."""
     # fetch the settings and cache them for later use
-    init_settings = settings(
+    init_settings = standalone.conf.settings(
         DATABASES={
             'default': {
                 'ENGINE': engine,

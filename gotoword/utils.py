@@ -1,65 +1,10 @@
 # -*- coding: utf8 -*-
 
-import sys
-import imp
-import os
-
-
-# TODO: load_src if it's not needed anymore
-def load_src(name, fpath):
-    """load_src("util", "../util.py")"""
-    return imp.load_source(name, os.path.join(os.path.dirname(__file__), fpath))
-
-
-# TODO: remove custom importer if it's not needed anymore
-def custom_importer(name, pathname):
-    # Fast path: see if the module has already been imported.
-    try:
-        return sys.modules[name]
-    except KeyError:
-        pass
-
-    # If any of the following calls raises an exception,
-    # there's a problem we can't handle -- let the caller handle it.
-
-    fp, pathname, description = imp.find_module(name)
-
-    try:
-        return imp.load_module(name, fp, pathname, description)
-    finally:
-        # Since we may exit via an exception, close fp explicitly.
-        if fp:
-            fp.close()
-
-#standalone = custom_importer('standalone', )
-#conf = custom_importer('conf', standalone.__path__)
-#standalone_path = ('/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/'
-#                   'lib/python2.7/site-packages')
-#sys.path.insert(1, standalone_path)
-#print(sys.path)
-
+# import from django-standalone:
 from standalone import models
-
-
-#standalone = load_src('standalone', standalone_path)
-#standalone = imp.load_source('standalone', standalone_path)
-#print(type(standalone))
-#models_path = ('/home/andrei/.vim/andrei_plugins/gotoword/virtualenv/'
-#               'lib/python2.7/site-packages/standalone')
-#models = load_src('models', models_path)
-#models = imp.load_source('models', models_path, 'models.py')
-#print(type(models))
-#print(dir(models))
-#print(models.__package__)
-#print(models.__file__)
-#print(models.__name__)
-#for key in dir(models):
-#    print(eval('models.' + key))
-#import models
-
-#from standalone import models
 # Read more about models:
 # https://docs.djangoproject.com/en/1.7/topics/db/models/
+#from gotoword_logging import logger, log
 
 
 class Context(models.StandaloneModel):

@@ -285,7 +285,10 @@ from gotoword import settings
 settings.setup(settings.DATABASE)
 from gotoword import gotoword
 from gotoword import utils
+from gotoword import gotoword_logging
 
+
+gotoword_logging.logger.debug("SCRIPT STARTED", extra={'className': ""}),
 
 app = gotoword.App()
 app.main()
