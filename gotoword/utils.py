@@ -68,6 +68,8 @@ class Context(models.StandaloneModel):
     kivy = Context.objects.create(name="kivy", description="Kivy is an " +
              "OSS library for GUI development suitable for multi-touch apps.")
     """
+    class Meta:
+        ordering = ['name']
     name = models.CharField("context name", max_length=50, unique=True)
     description = models.CharField("short description of context",
                                    max_length=100)
@@ -89,6 +91,8 @@ class Keyword(models.StandaloneModel):
     Eg.:
         canvas = Keyword.objects.create(name="canvas")
     """
+    class Meta:
+        ordering = ['name']
     name = models.CharField("keyword name", max_length=50, unique=True)
     contexts = models.ManyToManyField(Context, through='Data')
     # this is the source model, it has the ManyToManyField

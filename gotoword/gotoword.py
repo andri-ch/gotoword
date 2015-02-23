@@ -232,82 +232,9 @@ class App(object):
     @log
     def helper_save(self, context, test_answer):
         """
-        this function, if called twice on same keyword(first edit, then an update)
-        should know that it doesn't need to create another keyword, just to update
-        TODO: write a proper doc string
-
-        ### ALL COMBINATIONS ###
-        # from the user's point of view - what he types when he executes :HelperSave [context]
-        # [context] is optional
-
-        # keyword doesn't exist, context doesn't exist                                             0 0
-            # Do you want to specify a context?
-                # abort [a]
-                # yes -> create keyword with context   1
-                # no -> create keyword with no context 0
-
-        # keyword doesn't exist, context exists                                                    0 1
-            # context exists in db, do you want to create keyword with context?    1
-                # yes -> create keyword with context [default yes]       1
-                # no, user might have made a context spelling mistake    0
-            # context doesn't exist in db, do you want to assign keyword def. to a context?  0
-                                    # yes, create keyword & context [yes]     1
-                                    # no, user might have made a context spelling mistake  0
-
-        # keyword exists, context doesn't                                                          1 0
-            # with no context defined. Would the user want to create another context?
-                # yes, then prompt for user to specify context       1
-                             # update definition & context?  0
-                             # keep the old def, but new context, definition pair? (a dict)  1
-                # no, then update the existing definition, keep with no context.  0
-            # with one context. Would the user want to create another context?
-                # no [update keyword]
-                # yes [Keep old definition and create a new definition with context]
-                    # context == prevctx?
-                        # yes, update keyword, keep context
-                        # no, Does user want to create a new def. with context?
-                            # yes
-                            # no, update def. & update context
-            # with more contexts(more defs.)  # TODO display context and 3 lines from definition for each definition
-            # keyword exists with more contexts(more definitions) ->
-            # user chose which context to load, so the context should
-            # be known & stored before this function is called. Would the user want to create another context?
-                # yes, then prompt for user to specify context
-                             # update definition & context?
-                             # keep the old def, but new context, definition pair? (a dict)
-                # no, then update the existing definition, keep with same context.
-
-        # keyword exists, context exists                                                           1 1
-            # if more contexts, load one of them
-            # context exists in db:
-                # context == prevctx?
-                    # yes, then update keyword
-                    # no:
-                        # abort? [a]
-                        # keyword has no context. Update kewyword and assign a context?
-                            # yes
-                            # no, keep old definition and create a new def with this context
-                        # keyword has a context. Do you want to update just the keyword context?
-                            # yes, update keyword and context
-                            # no, keep old definition and create a new def with context
-            # context doesn't exist in db:
-                # abort [a]
-                # keyword has no context. Update kewyword and assign a context?
-                    # yes
-                    # no, keep old definition and create a new def with this context
-                # keyword has a context. Do you want to update just the keyword context?
-                    # yes, update keyword and context
-                    # no, keep old definition and create a new def with context
-
-                    #if keyword:
-                    #    # if keyword already defined in database, update it
-                    #    keyword = update_keyword_info(store, keyword, help_buffer)
-                    #else:
-                    #    # create a new keyword
-                    #    keyword = create_keyword(store, word, help_buffer)
-
-        ## TODO: context.name? this will be an error if no context is defined whatsoever
-        #print("Keyword and its definition were saved in %s context." % context.name)
+        If called for a word that doesn't exist into database - for the first
+        time - saves it to DB.
+        If called for an existing word, it will update it.
         """
         # bind to app for easier handling
         self.context = context
@@ -369,22 +296,16 @@ class App(object):
         """
         # select only the keyword names
         names = [kwd.name for kwd in utils.Keyword.objects.all()]
-        #result = STORE.execute("SELECT name FROM keyword;")
-        # dump from generator into a list
-        #l = result.get_all()
-        '''
-        >>> result
-        [u'line', u'canvas', u'color']
-        '''
-        names.sort()
         '''
         >>> names
         [u'canvas', u'color', u'line']
         '''
-        self.vim_wrapper.open_window(self.help_buffer_name, vim)
-        logger.debug("names: %s" % names,
-                     extra={'className': strip(self.__class__)})
-        self.vim_wrapper.help_buffer[:] = names
+        self._template(names)
+        #self.vim_wrapper.open_window(self.help_buffer_name, vim)
+        #logger.debug("names: %s" % names,
+        #             extra={'className': strip(self.__class__)})
+        #self.vim_wrapper.help_buffer[:] = names
+        return names
 
     @log
     def helper_all_contexts(self):
@@ -396,12 +317,14 @@ class App(object):
 
         # select only the context names
         names = [ctx.name for ctx in utils.Context.objects.all()]
-        names.sort()
+        #names.sort()
 
-        self.vim_wrapper.open_window(self.help_buffer_name, vim)
-        logger.debug("names: %s" % names,
-                     extra={'className': strip(self.__class__)})
-        self.vim_wrapper.help_buffer[:] = names
+        self._template(names)
+        #logger.debug("names: %s" % names,
+        #             extra={'className': strip(self.__class__)})
+        return names
+        # TODO: can dump logger.debug and just use return names because they
+        # get logged by @log anyway
 
     @log
     def helper_context_words(self, context):
@@ -415,43 +338,80 @@ class App(object):
         # locate context into DB and retrieve it as a Context object
         context_obj = utils.Context.objects.get(name=context)
         words = [kwd.name for kwd in context_obj.keyword_set.all()]
-        words.sort()
 
-        # TODO: the following can be split into a template, the above is the
-        # view
-        # add a title on the first line
-        self.vim_wrapper.help_buffer[0:0] = [
+        template = self._template_with_header
+        header = [
             "The following keywords have a meaning (definition) in '%s' "
             "context:" % context_obj.name]
-        # write data to buffer
-        self.vim_wrapper.help_buffer[1:] = words
+        template(header, words)
+
+        #self.vim_wrapper.open_window(self.help_buffer_name, vim)
+        ## add a title on the first line
+        #self.vim_wrapper.help_buffer[0:0] = [
+        #    "The following keywords have a meaning (definition) in '%s' "
+        #    "context:" % context_obj.name]
+        ## write data to buffer
+        #self.vim_wrapper.help_buffer[1:] = words
         return words
 
     @log
     def helper_word_contexts(self):
         """
-        It is used for testing, it should not be available to the user.
-        Returns a list of contexts.
+        Displays a list of contexts a keyword has definitions in, along with
+        one line of each definition.
         """
-        contexts = None
+        summary = []
         if self.keyword:
-            contexts = [ctx.name for ctx in self.keyword.contexts.all()]
-            contexts.sort()
-            self._display_word_contexts(self.keyword, contexts)
+            header = ["The keyword '%s' has information belonging to the "
+                      "following contexts:" % self.keyword.name]
+            template = self._template_with_header
+            contexts = self.keyword.contexts.all()
+            for ctx in contexts:
+                relation = self.keyword.data_set.get(context=ctx)
+                # choose user note if possible, else public note available for
+                # all users by default:
+                definition = (relation.info if relation.info else
+                              relation.info_public)
+                one_line_definition = definition.split("\n", 1)[0]
+                summary.extend([ctx.name, one_line_definition, "\n"])
+
+            template(header, summary)
+            return [ctx.name for ctx in contexts]
+            #self._display_word_contexts(self.keyword, summary)
 
     def _display_word_contexts(self, kw, contexts):
+        # TODO: can be removed
         # add a title on the first line
         if contexts:
+            self.vim_wrapper.open_window(self.help_buffer_name, vim)
             self.vim_wrapper.help_buffer[0:0] = [
                 "The keyword '%s' has information belonging to the following "
                 "contexts:" % kw.name]
             self.vim_wrapper.help_buffer[1:] = contexts
-        else:
-            # this branch is not useful since django orm so it should be
-            # deleted
-            self.vim_wrapper.help_buffer[:] = [
-                "The keyword '%s' has information that doesn't belong to any "
-                "context" % kw.name]
+
+    def _template(self, text):
+        """
+        Opens the help window and displays text in it.
+        text - a list of strings
+
+        Returns nothing.
+        """
+        self.vim_wrapper.open_window(self.help_buffer_name, vim)
+        self.vim_wrapper.help_buffer[:] = text
+
+    def _template_with_header(self, header, text):
+        """
+        Opens the help window and displays a title/header line and the rest
+        of the text.
+        header - a list with one string; can be just a string if one uses
+        help_buffer[0] = header, but help_buffer[0:0] = [header] is used in
+        accordance with help_buffer[1:3] = ['first line', 'second line']
+
+        Returns nothing.
+        """
+        self.vim_wrapper.open_window(self.help_buffer_name, vim)
+        self.vim_wrapper.help_buffer[0:0] = header
+        self.vim_wrapper.help_buffer[1:] = text
 
     def get_test_answer(self, obj):
         try:
@@ -522,7 +482,7 @@ class VimWrapper(object):
     def open_window(buffer_name, editor=None):
         """
         Opens a window inside vim editor with an existing buffer whose name is
-        buffer name.
+        buffer_name.
         editor - the editor is the global var. vim, but it is given as arg. so
                  that you can import this fct. in other modules, as well, such
                  as the testing module.
@@ -572,7 +532,7 @@ class VimWrapper(object):
             # should be moved to utils
             contexts = keyword.contexts.all()
             ctx_names = [ctx.name for ctx in contexts]
-            ctx_names.sort()
+            #ctx_names.sort()
             # TODO: keyword.current_context should be set by user if keyword
             # has more contexts
             keyword.current_context = contexts[0]
@@ -708,6 +668,8 @@ class ReadContextState(object):
             #return NewKeywordState()
         elif answer.startswith('2') or answer.startswith('n'):
             app.nocontextno = True        # debug
+            vim.command('echo "\n"')
+            vim.command('echomsg "You entered: [\"%s\"]"' % app.answer)
             return NewKeywordState()
         #elif answer.startswith('0') or answer.startswith('a'):
         elif answer.startswith('3') or answer.startswith('a'):

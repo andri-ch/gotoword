@@ -15,8 +15,9 @@ import unittest
 #from utils import create_keyword, update_keyword
 #from utils import load_keywords_store
 database_name = 'test.db'
-from settings import setup
-setup(db=database_name)
+from gotoword import settings
+settings.setup(db=database_name)
+from gotoword.utils import Keyword, Context, Data
 
 import django
 #from standalone.conf import settings
@@ -63,7 +64,6 @@ from django.core.management import call_command
 #django.setup()
 #####
 
-from utils import Keyword, Context, Data
 
 #DATABASE_PATH = path.dirname(path.abspath(__file__)
 
@@ -315,7 +315,7 @@ else:                                # when it is being imported
     words = kivy.keyword_set.all()
     # Display all keyword names that have a definition belonging to "kivy"
     # context:
-    context_kwds = [kwd.name for kwd in kivy.keyword_set.all()]
+    context_kwds = [kwd.name for kwd in words]
 
     # get all contexts in which canvas has a definition:
     canvas_contexts = canvas.contexts.all()

@@ -44,6 +44,8 @@ from vimrunner import Server
 # gotoword modules
 import asyncorelog
 from gotoword import settings
+settings.setup(settings.DATABASE)
+from gotoword import utils
 
 
 DATABASE = settings.DATABASE
@@ -527,23 +529,40 @@ class TestGotoword(unittest.TestCase):
         assert ('python' in all_contexts)
         time.sleep(0.5)
 
+    @unittest.skip("not valid anymore")
+    def test_HelperAllContexts_displays_context_and_description(self):
+        """python     a computer high level programming language ...
+           kivy       build GUI for touch screens ...
+        We assume there's a TAB "\t" between the name and description.
+        """
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
+        all_contexts = self.get_all_contexts(self.buffer_index)
+        all_contexts = all_contexts.split("\n")
+        all_contexts.sort()
+        #self.delay("test-all_contexts_name_and_descr", timeout=0.1)
+        # test just a couple of lines that have a descripton beside
+        # the context:
+        for line in range(0, 3):
+            assert (all_contexts[line].split("\t")[1])
+
     #@unittest.skip("")
-#    def test_013_HelperContextWords(self):
-#        ## -------------------------
-#        ## test 'HelperContextWords'
-#        ## -------------------------
-#        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
-#                          extra={'className': ""})
-#        # get keywords that are defined in the 'python' context using the
-#        # plugin we are testing in this test suite.
-#        context = "python"
-#        ctx_words = self.get_context_keywords(self.buffer_index, context)
-#        # get context from DB as a Context object and count keywords straight
-#        # from DB table
-#        ctx = utils.Context.objects.get(name=context)
-#        # compare the two numbers
-#        assert (len(ctx.keyword_set.all()) == len(ctx_words.split("\n")) - 1)
-#        # len(lines) - 1 because we omit the title line
+    def test_013_HelperContextWords(self):
+        ## -------------------------
+        ## test 'HelperContextWords'
+        ## -------------------------
+        self.logger.debug("Executing function %s " % inspect.stack()[0][3],
+                          extra={'className': ""})
+        # get keywords that are defined in the 'python' context using the
+        # plugin we are testing in this test suite.
+        context = "python"
+        ctx_words = self.get_context_keywords(self.buffer_index, context)
+        # get context from DB as a Context object and count keywords straight
+        # from DB table
+        ctx = utils.Context.objects.get(name=context)
+        # compare the two numbers
+        assert (len(ctx.keyword_set.all()) == len(ctx_words.split("\n")) - 1)
+        # len(lines) - 1 because we omit the title line
 
     ### other utilitary functions ###
     #################################
@@ -555,6 +574,8 @@ class TestGotoword(unittest.TestCase):
         """
         self.client.command('%s' % cmd)
         return self.client.eval('getbufline(%s, 1, "$")' % buffer_index)
+        #TODO: delay should be merged with get_cmd_output, so a delay is
+        # applied automatically
 
     def get_all_keywords(self, buffer_index):
         "Displays the output of HelperAllWords vim command."
@@ -619,6 +640,7 @@ class TestGotoword(unittest.TestCase):
         # gotoword buffer is readonly to prevent user from accidentally save
         # it with :w or to edit it with i, but we want to add text to it:
         self.client.command("set noreadonly")
+        # TODO: does 'set noreadonly' act on help buffer or on user's document?
 
         ### focus Helper_buffer window
         # all functions and classes from gotoword expect to have 'vim' python
@@ -633,6 +655,7 @@ class TestGotoword(unittest.TestCase):
         # delete default text:
         self.client.normal('gg')
         self.client.normal('dG')
+        # default text can be deleted by assigning a list of lines to buffer
         # add a definition for keyword
         self.client.insert("Test name '%s': This is definition for "
                            "keyword '%s'." % (fixture_name, kword))
@@ -657,6 +680,7 @@ class TestGotoword(unittest.TestCase):
             if i == 5:
                 raise RuntimeError("timeout of %s expired" % expected_value)
 
+    # TODO: open_window can be imported from gotoword
     def open_window(self, buffer_name, editor=None):
         """
         Opens a window inside vim editor with an existing buffer whose name is
@@ -696,11 +720,14 @@ class TestGotoword(unittest.TestCase):
 
 
 if __name__ == '__main__':
-#    with ThreadJoiner(1):
+    # run just one test:
+    #suite = unittest.TestSuite()
+    #suite.addTest(TestGotoword('test_012_HelperAllContexts'))
+    #suite.addTest(TestGotoword('test_HelperAllContexts_displays_context_'
+    #                           'and_description'))
+    #suite.addTest(TestGotoword('test_013_HelperContextWords'))
+    # run all tests from class:
     suite = unittest.makeSuite(TestGotoword)
     runner = unittest.TextTestRunner(stream=sys.stdout, verbosity=2,
                                      failfast=True)
     runner.run(suite)
-#        kill_waiting_thread()
-
-    #unittest.main()
