@@ -294,6 +294,8 @@ class TestGotoword(unittest.TestCase):
         # if the buffer or no window exists for it, -1 is returned by bufwinnr()
         #log.debug('window_nr: %s' % window_nr)
         assert (int(window_nr) != -1)
+        # Make test fail if you want to run first 3 tests:
+        #assert False
 
     #@unittest.skip("")
     def test_004_HSave_new_kwd_no_context_but_new_one_given_when_prompted(self):
@@ -488,6 +490,7 @@ class TestGotoword(unittest.TestCase):
         # update info
         self.client.write_buffer("line('$') + 1",
                                  "test update - add after last line")
+        #time.sleep(10)
         self.client.command('HelperSave')
         self.delay("test011-HelperSave to update")
         #self.client.command('Helper')

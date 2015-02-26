@@ -273,6 +273,7 @@ python <<EOF
 
 import vim
 import sys
+import logging
 
 # --------------------------------
 # Add our plugin to the path
@@ -283,12 +284,14 @@ sys.path.insert(1, gotoword_plugin_path)
 
 from gotoword import settings
 settings.setup(settings.DATABASE)
+from gotoword import gotoword_logging
+logger = gotoword_logging.set_up_logging(logging.DEBUG, 'vim')
+#gotoword_logging.logger.debug("SCRIPT STARTED", extra={'className': ""}),
+logger.debug("SCRIPT STARTED", extra={'className': ""}),
+
 from gotoword import gotoword
 from gotoword import utils
-from gotoword import gotoword_logging
 
-
-gotoword_logging.logger.debug("SCRIPT STARTED", extra={'className': ""}),
 
 app = gotoword.App()
 app.main()

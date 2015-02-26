@@ -178,7 +178,7 @@
     </p>
   </body>
 </html></richcontent>
-<node CREATED="1424515120721" HGAP="75" ID="ID_548009505" MODIFIED="1424529641722" TEXT="UpdateKeywordState" VSHIFT="10">
+<node CREATED="1424515120721" HGAP="75" ID="ID_548009505" MODIFIED="1424646796727" TEXT="UpdateKeywordState" VSHIFT="10">
 <richcontent TYPE="NOTE"><html>
   <head>
     
@@ -188,8 +188,8 @@
       it shouldn't test context, because all states that lead to this one have done that already.
     </p>
   </body>
-</html></richcontent>
-<icon BUILTIN="button_cancel"/>
+</html>
+</richcontent>
 <node CREATED="1424515336878" HGAP="78" ID="ID_768795858" MODIFIED="1424536388638" TEXT="if context" VSHIFT="-73">
 <icon BUILTIN="button_cancel"/>
 <node CREATED="1424515372067" HGAP="33" ID="ID_597853387" MODIFIED="1424536380599" TEXT="if not ctx" VSHIFT="-21">
