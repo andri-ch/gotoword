@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ### System libraries ###
+import logging
 #import os.path
 #import threading
 #import time
@@ -22,14 +23,22 @@ except ImportError:
 from settings import (PKG_PATH, VIM_PLUGIN_PATH, DJANGO_PATH, SCRIPT,
                       HELP_BUFFER, DATABASE)
 import utils
-from gotoword_logging import logger, log
+from gotoword_logging import logger_as_decorator_factory
 from gotoword_logging import strip
+
+
+logger = logging.getLogger('vim.gotoword')
+log = logger_as_decorator_factory(logger)
 
 """Set TESTING - flag to indicate that a log server in functional tests file
 might be up, so this script is under test and should accept test input using
 Vim's input functions."""
-TESTING = True if logger.handlers[1].sock else False
-
+TESTING = True if logging.getLogger('vim').handlers[1].sock else False
+# socket is created just before the first log message in the entire app
+# (including gotoword.vim) is
+# created, so TESTING will be False if called before the logger starts sending
+# messages
+#logger.debug("TESTING: %s" % TESTING, extra={'className': ""})
 
 logger.debug("Following constants are defined: \n"
              "\t\t PKG_PATH: %s \n"
@@ -37,9 +46,10 @@ logger.debug("Following constants are defined: \n"
              "\t\t DJANGO_PATH: %s \n"
              "\t\t SCRIPT: %s \n"
              "\t\t HELP_BUFFER: %s \n"
-             "\t\t DATABASE: %s \n" %
+             "\t\t DATABASE: %s \n"
+             "\t\t TESTING: %s \n" %
              (PKG_PATH, VIM_PLUGIN_PATH, DJANGO_PATH, SCRIPT, HELP_BUFFER,
-             DATABASE),
+             DATABASE, TESTING),
              extra={'className': ""}
              )
 
