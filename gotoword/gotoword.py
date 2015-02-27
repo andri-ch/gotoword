@@ -66,6 +66,9 @@ class App(object):
     # but we specify a full path as its name
 
     def __init__(self, vim_wrapper=None):
+        """
+        TODO: write a proper doc string... explaining the attributes
+        """
         self.vim_wrapper = vim_wrapper
         self.word = None
         # the current keyword which will be displayed in helper buffer
@@ -74,8 +77,13 @@ class App(object):
         # we are sure that 'default' context exists in DB
         self.default_context = utils.find_model_object('default',
                                                        utils.Context)
-        # a list of strings (test answers) used when script is under test
-        self.test_answers = []
+        """
+        a list of strings (test answers) used when script is under test; the
+        values are added in another script (functional tests file) by sending
+        the strings to Vim editor -> check docstring from
+        App.get_test_answer.
+        """
+        self.test_answers = {}
         logger.debug("app init", extra={'className': strip(self.__class__)})
 
     #@log
@@ -272,7 +280,18 @@ class App(object):
         self.vim_wrapper.help_buffer[1:] = text
 
     def get_test_answer(self, obj):
+        """Retrieves first value from App.test_answers list.
+        Usage:
+        In functional tests file:
+        >>> vim_client.command('py app.test_answers.append("test answer")'
+
+        In the app script:
+        >>> user_input = App.get_test_answer()
+        >>> print(user_input)
+        'test_answer'
+        """
         try:
+            # FIFO queue:
             answer = self.test_answers.pop(0)
             return answer
         except IndexError:
@@ -503,7 +522,7 @@ class ReadContextState(object):
         # chosen
 
         if TESTING:
-            answer = app.get_test_answer(self)
+            answer = app.test_answers['user_input']
         else:
             answer = vim.eval('user_input')
             answer = answer.strip().lower()
@@ -576,7 +595,7 @@ class CheckContextState(object):
         # capture from stdin the context name
         message = "Enter a one word context name: "
         if TESTING:
-            answer = app.get_test_answer(self)
+            answer = app.test_answers['context']
         else:
             answer = get_user_input(message, test_answer)
 
@@ -607,7 +626,7 @@ class CreateContextState(object):
         # capture from stdin the short description of the context
         message = "Enter a short description of the context you just defined: \n"
         if TESTING:
-            answer = app.get_test_answer(self)
+            answer = app.test_answers['context_description']
         else:
             answer = get_user_input(message, test_answer)
 

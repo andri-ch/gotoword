@@ -311,14 +311,13 @@ class TestGotoword(unittest.TestCase):
         ## -------------------------
         #  call HelperSave with no context
         ## -------------------------
-        # test when user calls :HelperSave with no arguments, we simulate an
-        # empty argument with "" and we simulate user chose choice number 1;
         # populate test_answers with answers that we know the app would need,
         # the first appended answer is used first by the app (FIFO):
-        self.client.command('py app.test_answers.append("1")')
-        self.client.command('py app.test_answers.append("functional tests")')
-        self.client.command('py app.test_answers.append("created during '
-                            'functional tests")')
+        self.client.command('py app.test_answers["user_input"] = "1"')
+        self.client.command('py app.test_answers["context"] = "functional '
+                            'tests"')
+        self.client.command('py app.test_answers["context_description"] = '
+                            '"created during functional tests"')
         self.client.command('HelperSave ""')
         # because in Vim it is difficult to simulate user input when
         # unit testing, the above solution was chosen. The ideal test situation
@@ -349,6 +348,8 @@ class TestGotoword(unittest.TestCase):
         # delete the context given too
         self.client.command('HelperDeleteContext functional tests')
         time.sleep(0.2)
+        # Make test fail if you want to run first 3 tests:
+        #assert False
 
     #@unittest.skip("")
     def test_005_HS_new_kw_no_context_but_existing_one_given_when_prompted(self):
@@ -383,7 +384,7 @@ class TestGotoword(unittest.TestCase):
         # make sure that Vim has caught up with the stage/state of this test
         self.delay("test007-fixture")
 
-        self.client.command('py app.test_answers.append("2")')
+        self.client.command('py app.test_answers["user_input"] = "2"')
         self.client.command('HelperSave ""')
         self.delay("test007-after helpersave", 0.25)
         ## check definition and keyword are stored to database
@@ -409,7 +410,7 @@ class TestGotoword(unittest.TestCase):
                           extra={'className': ""})
         self.keyword_fixture('new kw no context but cancel', 'rgb',
                              self.buffer_index, self.buffer_name)
-        self.client.command('py app.test_answers.append("3")')
+        self.client.command('py app.test_answers["user_input"] = "3"')
         self.client.command('HelperSave ""')
         self.delay("test008-HelperSave")
         ## check definition and keyword are not stored to database
@@ -450,8 +451,8 @@ class TestGotoword(unittest.TestCase):
 
         ## we save again the word 'rgb', but we supply a context that doesn't
         # exist yet in database
-        self.client.command('py app.test_answers.append("created during '
-                            'functional tests")')
+        self.client.command('py app.test_answers["context_description"] = '
+                            '"created during functional tests"')
         context = "functional tests"
         self.client.command('HelperSave %s' % context)
         self.delay("test010-after helpersave", 0.5)
@@ -483,8 +484,8 @@ class TestGotoword(unittest.TestCase):
                              kword, self.buffer_index, self.buffer_name)
         time.sleep(0.3)
         context = "functional tests"
-        self.client.command('py app.test_answers.append("test description of '
-                            'functional tests")')
+        self.client.command('py app.test_answers["context_description"] = '
+                            '"test description of functional tests"')
         self.client.command('HelperSave %s' % context)
         self.delay("test011-HelperSave")
         # update info
