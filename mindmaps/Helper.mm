@@ -3,14 +3,14 @@
 <node CREATED="1424534677972" ID="ID_900278877" MODIFIED="1424534683133" TEXT="Helper">
 <node CREATED="1424534686270" ID="ID_1643846199" MODIFIED="1424534691441" POSITION="right" TEXT="if keyword">
 <node CREATED="1424534806781" HGAP="22" ID="ID_548064031" MODIFIED="1424534816276" TEXT="if multiple contexts" VSHIFT="-15">
-<node CREATED="1424535085631" HGAP="24" ID="ID_605569660" MODIFIED="1424725713302" TEXT="display a list of contexts" VSHIFT="-18">
+<node CREATED="1424535085631" FOLDED="true" HGAP="24" ID="ID_605569660" MODIFIED="1425023732626" TEXT="display a list of contexts" VSHIFT="-18">
 <richcontent TYPE="NOTE"><html>
   <head>
     
   </head>
   <body>
     <p>
-      each context has one line of definition beside.&#160;And a prompt for user to choose a context or to create a new one.
+      each context has one line of definition under it.&#160;And a prompt for user to choose a context or to create a new one.
     </p>
     <p>
       To display a list of contexts, it should use App.helper_all_contexts().
