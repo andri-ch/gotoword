@@ -83,11 +83,19 @@ let g:gotoword_loaded = 1
 " --------------------------------
 
 if !exists(":Helper")
-  command -nargs=0 Helper call s:Help_buffer(expand("<cword>"))
+  "command -nargs=0 -range Helper call s:Help_buffer(<line1>, <line2>)
+  command -nargs=? -range Helper call s:Help_buffer(<line1>, <line2>, <f-args>)
 endif
 " We define the command :Helper to call the function Help_buffer. 
 " The -nargs argument states how many arguments the command will take.
 " :call Help_buffer(expand("<cword>"))   " call fct with word under the cursor 
+" Eg:
+" Situation 1: display a note for the word under the cursor
+" :Helper 
+" Situation 2: display a note for any word you want
+" :Helper word_you_want
+" Situation 3: display a note for a visual selection, select word/words
+" :Helper
 
 if !exists(":HelperSave")
   command -nargs=? HelperSave call s:Helper_save(<f-args>)   
@@ -148,20 +156,91 @@ endif
 " FUNCTIONS 
 " --------------------------------
 
-function! s:Help_buffer(word)           
+function! s:Help_buffer(...)           
+"function! s:Help_buffer(word)           
     " TODO: rename this function to Helper
     " fct name always starts with uppercase
     " s: means function is local to script, not part of the global namespace
+  if a:0 == 2
+    "echomsg "situation 1 or 3"
+    let lines = getline(a:1, a:2)
+    let mode = visualmode(1)
+    if mode != '' && line("'<") == a:1
+      "echomsg "mode != ''"
+      if mode == "v"
+        "echomsg "character-wise visual mode"
+        let start = col("'<") - 1
+        let end = col("'>") - 1
+        " slice i:w
+        " n end before start in case the selection is only one line
+        let lines[-1] = lines[-1][: end]
+        let lines[0] = lines[0][start :]
+        " just for debugging; word in this case should be the whole selected
+        " text.
+        "let word = join(lines, ' ')
+        let word = lines
+        "echo word
+      elseif mode == "\<c-v>"
+        "echomsg "block-wise visual mode"
+        let start = col("'<")
+        if col("'>") < start
+          let start = col("'>")
+        endif
+        let start = start - 1
+        call map(lines, 'v:val[start :]')
+        " just for debugging; word in this case should be the whole selected
+        " text.
+        "let word = join(lines, ' ')
+        let word = lines
+        "echo word
+      endif
+    else
+      " Situation 1
+      "echomsg "this is branch with no visual mode"
+      " Eg: this expands "python.py" to "python", the word under cursor ends at 
+      " . (dot)
+      let word = expand("<cword>")
+      "let word = expand("<cWORD>")
+    endif
+  elseif a:0 == 3
+    " Situation 2 
+    "echomsg "this is branch a:0 == 3"
+    let argtype = type(a:3)
+    if argtype == 1
+      " a String
+      "echomsg "this is branch with argtype == 1"
+      let word = a:3
+      let lines = split(a:1, "\n")
+    else
+      echoe 'gotoword: Argument must be a string.'
+      return
+    endif
+  else
+    echoe 'gotoword: Invalid number of arguments for Helper.'
+    return
+  endif
 
 python << EOF
 # get function argument
-word = gotoword.vim.eval("a:word")      # get argument by name
+#word = gotoword.vim.eval("a:word")      # get argument by name, Help_buffer(word)
 # word = vim.eval("a:1")                # get argument by position (first one)
+#word = gotoword.vim.eval("word")
+word = gotoword.vim.eval("word")
+if type(word) == list:
+    for i, line in enumerate(word):
+        word[i] = line.strip()
+if len(word) == 1:
+    # one line of text only (one or more words)
+    word = word[0]
+else:
+    pass
+    # multiple lines should be used to extract context, etc.
+#logger.debug("INPUT IS: %s" % type(word), extra={'className': ''})
 
 app.keyword = app.vim_wrapper.update_buffer(word)
 EOF
 
-    let g:loaded_Help_buffer = 1
+  let g:loaded_Help_buffer = 1
 endfunction
 
 
@@ -267,6 +346,17 @@ function! s:Helper_word_contexts()
 endfunction
 
 
+function! Get_visual_selection()
+  " Why is this not a built-in Vim script function?!
+  let [lnum1, col1] = getpos("'<")[1:2]
+  let [lnum2, col2] = getpos("'>")[1:2]
+  let lines = getline(lnum1, lnum2)
+  let lines[-1] = lines[-1][: col2 - (&selection == 'inclusive' ? 1 : 2)]
+  let lines[0] = lines[0][col1 - 1:]
+  return join(lines, "\n")
+endfunction
+
+
 " MAIN 
 " When this script is loaded into VIM, the following code is executed:
 python <<EOF
@@ -280,7 +370,12 @@ import logging
 # --------------------------------
 gotoword_plugin_path = vim.eval('expand("<sfile>:h")')
 # :help sfile
-sys.path.insert(1, gotoword_plugin_path)
+#sys.path.insert(1, gotoword_plugin_path)
+
+## hack for plugin to work during development
+sys.path.insert(1, '/home/andrei/.vim/andrei_plugins/gotoword')
+
+
 
 from gotoword import settings
 settings.setup(settings.DATABASE)

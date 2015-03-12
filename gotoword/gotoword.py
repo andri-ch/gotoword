@@ -90,9 +90,6 @@ class App(object):
     def main(self):
         """This is the main entry point of this script."""
         self.vim_wrapper = VimWrapper(app=self)
-        # detect if run inside vim editor and if yes, setup help_buffer
-        #if not isinstance(self.vim_wrapper.vim, VimServer):
-        #    self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
         self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
 
     @log

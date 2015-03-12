@@ -4,7 +4,7 @@
 
 <MyWidget>:
 # This class is for experimenting functionality, etc.
-# THis is a stub line test Test
+# THis is a stub line test Test test.py
 	canvas:
         Color:
             rgb: .5, .5, .5
