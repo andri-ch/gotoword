@@ -77,6 +77,10 @@ if exists("g:gotoword_loaded")
 endif
 let g:gotoword_loaded = 1
 
+" define the highlight group
+hi GotowordLinks guibg=#33ff33 ctermbg=Cyan
+" define the syntax item
+"syntax match GotowordLinks /Ok\%4l\c\|Cancel\%4l\c\|Create context\%4l\c/
 
 " --------------------------------
 " COMMANDS 

@@ -224,7 +224,10 @@ class App(object):
         one line of each definition.
         """
         summary = []
-        if self.keyword:
+        # links stores words that will be highlighted and considered links to
+        # other notes
+        links = []
+        if self.keyword:                     # what is the 'else' branch?
             header = ["The keyword '%s' has information belonging to the "
                       "following contexts:" % self.keyword.name]
             template = self._template_with_header
@@ -237,10 +240,22 @@ class App(object):
                               relation.info_public)
                 one_line_definition = definition.split("\n", 1)[0]
                 summary.extend([ctx.name, one_line_definition, "\n"])
+                links.append(ctx.name)
 
             template(header, summary)
+            for link in links:
+                self._highlight_links(link)
+
             return [ctx.name for ctx in contexts]
             #self._display_word_contexts(self.keyword, summary)
+
+    def _highlight_links(self, link):
+        """Highlight the words which are considered links. In Vim, to define
+        the syntax item one would write something like this:
+        syntax match GotowordLinks /Ok\%4l\c\|Cancel\%4l\c/
+        Of course, GotowordLinks needs to be defined already.
+        """
+        vim.command('syntax match GotowordLinks /%s\c/' % link)
 
     def _display_word_contexts(self, kw, contexts):
         # TODO: can be removed
