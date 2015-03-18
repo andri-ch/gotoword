@@ -245,7 +245,8 @@ else:
     # multiple lines should be used to extract context, etc.
 #logger.debug("INPUT IS: %s" % type(word), extra={'className': ''})
 
-app.keyword = app.vim_wrapper.update_buffer(word)
+#app.keyword = app.vim_wrapper.update_buffer(word)
+app.keyword = app.helper(word)
 EOF
 
   let g:loaded_Help_buffer = 1
@@ -352,40 +353,6 @@ function! s:Helper_word_contexts()
 "    " cursor?
     python app.helper_word_contexts()
 endfunction
-
-
-"function! s:Get_visual_selection()
-"  " Why is this not a built-in Vim script function?!
-"  let [lnum1, col1] = getpos("'<")[1:2]
-"  let [lnum2, col2] = getpos("'>")[1:2]
-"  let lines = getline(lnum1, lnum2)
-"  let lines[-1] = lines[-1][: col2 - (&selection == 'inclusive' ? 1 : 2)]
-"  let lines[0] = lines[0][col1 - 1:]
-"  return join(lines, "\n")
-"endfunction
-
-
-"function! g:Gotoword_make_links()
-"    " TODO: replace it with a python function (app._make_links)
-"    " Used to create the right side hand of a mapping. 
-"    " Eg, instead of 
-"    " :noremap <buffer> <2-LeftMouse> :Helper<cr>
-"    " one can do
-"    " :noremap <buffer> <expr> <2-LeftMouse> Gotoword_make_links()
-"    " See also *:map-expression*
-"  let word = expand("<cword>")
-""python <<EOF
-""#vim.command('let links = %s' % utils.create_vim_list(app.links))
-""EOF
-"
-"python <<EOF
-"word = vim.eval("word")
-"# because of this word expansion, links should be only one word...
-"# TODO: make links to be made of multiple words
-"if word in app.links:
-"    vim.command('Helper')
-"EOF
-"endfunction
 
 
 " MAIN 

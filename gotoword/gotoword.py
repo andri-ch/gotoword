@@ -57,13 +57,15 @@ logger.debug("Following constants are defined: \n"
 class App(object):
     """
     This is the main plugin app. Run App.main() method to launch it.
+    gotoword.vim acts as a controller, helper_* methods of this class are the
+    views and Template class implements templates for each view.
     """
     # create a help_buffer that will hold info retrieved from database, etc.
     # but prevent vim to create buffer in current working dir, by setting an
     # explicit path;
     help_buffer_name = HELP_BUFFER
     # help_buffer is created on the fly, in memory, it doesn't exist on disk,
-    # but we specify a full path as its name
+    # but we specify an absolute path as its name
 
     def __init__(self, vim_wrapper=None):
         """
@@ -77,9 +79,6 @@ class App(object):
         # we are sure that 'default' context exists in DB
         self.default_context = utils.find_model_object('default',
                                                        utils.Context)
-        # 'links' will store words that will be highlighted and will be
-        # considered links that will lead to other notes (like tags)
-        #self.links = []
         """
         a list of strings (test answers) used when script is under test; the
         values are added in another script (functional tests file) by sending
@@ -97,6 +96,64 @@ class App(object):
         self.template = Template(self.vim_wrapper, App.help_buffer_name)
         links_observer = LinksObserver(self.template)
         self.template.attach(links_observer)
+
+    @log
+    def helper(self, word):
+        """
+        Updates an existing buffer with information about a
+        keyword or displays an invitation for the user to fill in info about
+        words that don't exist in the database.
+
+        Tasks:
+            open help buffer in its own window
+            look for keyword in database
+            display info in the help_buffer
+        """
+        # convert fct. arg to unicode, for python2.x, this is what is stored in the db
+        word = unicode(word)
+        # make it case-insensitive
+        self.word = word.lower()
+
+        # look for keyword in DB
+        keyword = utils.find_model_object(self.word, utils.Keyword)
+
+        if keyword:
+            # get contexts this keyword belongs to (specific to ORM); it
+            # should be moved to utils
+            contexts = keyword.contexts.all()
+            ctx_names = [ctx.name for ctx in contexts]
+            #ctx_names.sort()
+            # TODO: keyword.current_context should be set by user if keyword
+            # has more contexts
+            keyword.current_context = contexts[0]
+            logger.debug("word: %s keyword: %s contexts: %s" %
+                         (word, keyword, ctx_names),
+                         extra={'className': strip(self.__class__)})
+            # TODO: is the title line removed when kw is updated?
+            # maybe it's best to write the content then insert at index 0 the
+            # title line, after a md5sum is made, and when reading data, check
+            # that title line hasn't changed by checking the md5sum again...
+            #self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
+            #                         (keyword.name, "; ".join(ctx_names))]
+            header = ['keyword: %s   contexts: %s' %
+                      (keyword.name, "; ".join(ctx_names))]
+            ## for now, only content from first context is displayed:
+            content_main_ctx = keyword.data_set.get(context=keyword.current_context)
+            body = content_main_ctx.info.splitlines()
+            # .splitlines() is used because vim buffer accepts at most one "\n"
+            # per vim line
+            self.template.template(body, header=header)
+        else:
+            # keyword doesn't exist, prepare buffer to be filled with user content
+            logger.debug("word: %s keyword: %s" %
+                         (word, keyword),
+                         extra={'className': strip(self.__class__)})
+
+            # write to buffer the small help text
+            body = utils.introduction_line(word).splitlines()
+            self.template.template(body)
+            keyword = None
+        return keyword
 
     @log
     def helper_save(self, context, test_answer):
@@ -138,8 +195,6 @@ class App(object):
             # TODO: kw_name exists only for the print msg, but can be replaced by
             # keyword.name which is still in the namespace, right?
             keyword.delete()
-#            STORE.remove(keyword)
-#            STORE.commit()
             print("Keyword %s and its definition was removed from database" %
                   kw_name)
         else:
@@ -170,10 +225,6 @@ class App(object):
         [u'canvas', u'color', u'line']
         '''
         self.template.template(names)
-        #self.vim_wrapper.open_window(self.help_buffer_name, vim)
-        #logger.debug("names: %s" % names,
-        #             extra={'className': strip(self.__class__)})
-        #self.vim_wrapper.help_buffer[:] = names
         return names
 
     @log
@@ -189,11 +240,7 @@ class App(object):
         #names.sort()
 
         self.template.template(names)
-        #logger.debug("names: %s" % names,
-        #             extra={'className': strip(self.__class__)})
         return names
-        # TODO: can dump logger.debug and just use return names because they
-        # get logged by @log anyway
 
     @log
     def helper_context_words(self, context):
@@ -222,14 +269,11 @@ class App(object):
         """
 
         #name = "helper_word_contexts"
-        summary = []
-        # reset global value of links because it is specific to each view
-        #self.links = []
+        body = []
         links = []
         if self.keyword:                     # what is the 'else' branch?
             header = ["The keyword '%s' has information belonging to the "
                       "following contexts:" % self.keyword.name]
-            #template = self._template_with_header
             contexts = self.keyword.contexts.all()
             for ctx in contexts:
                 relation = self.keyword.data_set.get(context=ctx)
@@ -238,83 +282,18 @@ class App(object):
                 definition = (relation.info if relation.info else
                               relation.info_public)
                 one_line_definition = definition.split("\n", 1)[0]
-                summary.extend([ctx.name, one_line_definition, "\n"])
-                #self.links.append(ctx.name)
+                body.extend([ctx.name, one_line_definition, "\n"])
                 links.append(ctx.name)
 
-            self.template.template(summary, header, links,
+            self.template.template(body, header, links,
                                    syntax_group="GotowordLinks")
-            #self._highlight_links(self.links)
-            # TODO: disable highlighting when the view is changed
+            # TODO: remove these 2 lines after you implemented autocmds for
+            # :w instead of HelperSave
             #vim.command('au BufWinEnter <buffer=%s>  py app._clear_highlight_links("GotowordLinks")' % self.vim_wrapper.buffer_nr)
             #vim.command('au BufWinEnter <buffer=%s>  echo "hold")' % self.vim_wrapper.buffer_nr)
-            # next time buffer is reloaded (with :sbuffer, etc.), this autocmd
-            # will be used
-
-            # create a mapping only for Helper buffer, buffer must be active when
-            # the mapping is created because <buffer> requires it
-            #command = 'noremap <buffer> <silent> <2-LeftMouse> :call g:Gotoword_make_links()<cr>'
-            # during development, <silent> can be omitted so we can see what
-            # function is called when executing this mapping:
-            #command = 'noremap <buffer> <silent> <2-LeftMouse> :call g:Gotoword_make_links()<cr>'
-            #command = 'noremap <buffer> <silent> <2-LeftMouse> :py app._make_links()<cr>'
-            #self.vim_wrapper.toggle_activate(command)
-            # TODO: disable links when template is changed
-            #command = 'unmap <buffer> <2-LeftMouse>'
-            #self.vim_wrapper.toggle_activate(command)
 
             return [ctx.name for ctx in contexts]
-            #self._display_word_contexts(self.keyword, summary)
 
-#    def _highlight_links(self, links):
-#        """Highlight the words which are considered links. In Vim, to define
-#        the syntax item one would write something like this:
-#        syntax match GotowordLinks /Ok\%4l\c\|Cancel\%4l\c/
-#        Of course, GotowordLinks needs to be defined already.
-#        """
-#        for link in links:
-#            vim.command('syntax match GotowordLinks /%s\c/' % link)
-#
-#    def _clear_highlight_links(self, group):
-#        """Disables syntax highlighting for a group for the current buffer. Eg:
-#        suppose "GotowordLinks is a syntax group,
-#        >>> self._clear_highlight_links("GotowordLinks")
-#        """
-#        command = 'syntax clear %s' % group
-#        self.vim_wrapper.toggle_activate(command)
-#
-#    def _make_links(self):
-#        """Calls Helper if word under cursor (<cword>) exists in links."""
-#        word = vim.eval('expand("<cword>")')
-#        # because of this word expansion, links should be only one word...
-#        # TODO: make links to be made of multiple words
-#        if word in self.links:
-#            vim.command('Helper')
-#
-#    def _template(self, text):
-#        """
-#        Opens the help window and displays text in it.
-#        text - a list of strings
-#
-#        Returns nothing.
-#        """
-#        self.vim_wrapper.open_window(self.help_buffer_name, vim)
-#        self.vim_wrapper.help_buffer[:] = text
-#
-#    def _template_with_header(self, header, text):
-#        """
-#        Opens the help window and displays a title/header line and the rest
-#        of the text.
-#        header - a list with one string; can be just a string if one uses
-#        help_buffer[0] = header, but help_buffer[0:0] = [header] is used in
-#        accordance with help_buffer[1:3] = ['first line', 'second line']
-#
-#        Returns nothing.
-#        """
-#        self.vim_wrapper.open_window(self.help_buffer_name, vim)
-#        self.vim_wrapper.help_buffer[0:0] = header
-#        self.vim_wrapper.help_buffer[1:] = text
-#
     def get_test_answer(self, obj):
         """Retrieves first value from App.test_answers list.
         Usage:
@@ -344,11 +323,11 @@ class Template(object):
         self.header = None
         # header will be a list of strings that will be written to help buffer
         # to form the header lines
-        self.links = None
-        # links will be a list of words that will behave like hyperlinks
-        # TODO: add def for links from App.__init__
+        self.links = []
+        # 'links' will store words that will be highlighted and will be
+        # considered links that will lead to other notes (like tags)
         self.syntax_group = None
-        # words belonging to syntax_group that will be highlighted as links
+        # words belonging to syntax_group will be highlighted as links
 
     def attach(self, observer):
         self.observers.append(observer)
@@ -358,36 +337,40 @@ class Template(object):
             observer()
 
     #def template(self, *args, **kwargs):
-    def template(self, text, header=None, links=None, syntax_group=None):
+    def template(self, body, header=None, links=[], syntax_group=None):
         """Main method for this class. It chooses the template based on the
         arguments it gets.
+        A template mimics the structure and functionality of an HTML document:
+        head, body, links, etc.
+        From Vim's point of view, a template loads content into buffer,
+        previous content is deleted
         Eg:
         >>> t = Template(wrapper, buf_name)
-        >>> t.template(text, header, links)
+        >>> t.template(body, header, links)
         """
         self.header = header
         self.links = links
         self.syntax_group = syntax_group
         if header:
-            self._template_with_header(text, header, links)
+            self._template_with_header(body, header, links)
         else:
-            self._template(text, links)
+            self._template(body, links)
 
-    def _template(self, text, links):
+    def _template(self, body, links):
         """
-        Opens the help window and displays text in it.
-        text - a list of strings
+        Opens the help window and displays body in it.
+        body - a list of strings
 
         Returns nothing.
         """
         self.vim_wrapper.open_window(self.help_buffer_name, vim)
-        self.vim_wrapper.help_buffer[:] = text
+        self.vim_wrapper.help_buffer[:] = body
         self._update_observers()
 
-    def _template_with_header(self, text, header, links):
+    def _template_with_header(self, body, header, links):
         """
         Opens the help window and displays a title/header line and the rest
-        of the text.
+        of the body.
         header - a list with one string; can be just a string if one uses
         help_buffer[0] = header, but help_buffer[0:0] = [header] is used in
         accordance with help_buffer[1:3] = ['first line', 'second line']
@@ -396,7 +379,7 @@ class Template(object):
         """
         self.vim_wrapper.open_window(self.help_buffer_name, vim)
         self.vim_wrapper.help_buffer[0:0] = header
-        self.vim_wrapper.help_buffer[1:] = text
+        self.vim_wrapper.help_buffer[1:] = body
         self._update_observers()
 
     def _make_links(self):
@@ -409,8 +392,9 @@ class Template(object):
 
     def _disable_links(self):
         "Clear mapping for double LMB click in the helper buffer."
-        command = 'unmap <buffer> <2-LeftMouse>'
-        self.vim_wrapper.toggle_activate(command)
+        unclickable = 'unmap <buffer> <2-LeftMouse>'
+        not_enter = 'unmap <buffer> <CR>'
+        self.vim_wrapper.toggle_activate(unclickable, not_enter)
 
 
 class LinksObserver(object):
@@ -450,15 +434,21 @@ class LinksObserver(object):
         if not self.template.links:
             return
         self._highlight_links(self.template.syntax_group, self.template.links)
-        # map, only for the helper buffer, double LMB click to call _make_links
-        # that makes words "click-able"
-        command = ('noremap <buffer> <2-LeftMouse> :python '
-                   'app.template._make_links()<CR>')
+        # map double LMB click to call _make_links that makes
+        # words "click-able"
+        # works only in the helper buffer (when it's active)
+        # for debugging, <silent> is omitted
+        clickable = ('noremap <buffer> <2-LeftMouse> :python '
+                     'app.template._make_links()<CR>')
+        #clickable = ('noremap <buffer> <silent> <2-LeftMouse> :python '
+        #             'app.template._make_links()<CR>')
         # one can see existing key maps with
         # :verbose map <2-LeftMouse>
-        #command = ('noremap <buffer> <silent> <2-LeftMouse> :python '
-        #           'app.template._make_links()<CR>')
-        self.template.vim_wrapper.toggle_activate(command)
+
+        # make links to respond to <Enter> too
+        enter = ('noremap <buffer> <CR> :python '
+                 'app.template._make_links()<CR>')
+        self.template.vim_wrapper.toggle_activate(clickable, enter)
 
     def _highlight_links(self, group, links):
         """Highlight the words which are considered links. In Vim, to define
@@ -487,7 +477,7 @@ class VimWrapper(object):
     interface to a vim server, all commands and expressions are sent to it.
     """
     def __init__(self, app=None):
-        self.app = app
+        #self.app = app
         self.help_buffer = None
 
     #@log
@@ -564,71 +554,6 @@ class VimWrapper(object):
         # CTRL-W p   Go to previous (last accessed) window.
         editor.command('call feedkeys("\<C-w>p")')
 
-    @log
-    def update_buffer(self, word):
-        """
-        Updates an existing buffer with information about a
-        keyword or displays an invitation for the user to fill in info about
-        words that don't exist in the database.
-
-        Tasks:
-            open help buffer in its own window
-            look for keyword in database
-            display info in the help_buffer
-        """
-        # convert fct. arg to unicode, for python2.x, this is what is stored in the db
-        word = unicode(word)
-        # make it case-insensitive
-        self.app.word = word.lower()
-        #self.open_window(self.app.help_buffer_name, vim)
-
-        # look for keyword in DB
-        keyword = utils.find_model_object(self.app.word, utils.Keyword)
-
-        if keyword:
-            # get contexts this keyword belongs to (specific to ORM); it
-            # should be moved to utils
-            contexts = keyword.contexts.all()
-            ctx_names = [ctx.name for ctx in contexts]
-            #ctx_names.sort()
-            # TODO: keyword.current_context should be set by user if keyword
-            # has more contexts
-            keyword.current_context = contexts[0]
-            logger.debug("word: %s keyword: %s contexts: %s" %
-                         (word, keyword, ctx_names),
-                         extra={'className': strip(self.__class__)})
-            # add a title line at the top;
-            # TODO: is the title line removed when kw is updated?
-            # maybe it's best to write the content than insert at index 0 the
-            # title line, after a md5sum is made, and when reading data, check
-            # that title line hasn't changed by checking the md5sum again...
-            #self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
-            #                         (keyword.name, "; ".join(ctx_names))]
-            header = ['keyword: %s   contexts: %s' %
-                      (keyword.name, "; ".join(ctx_names))]
-            # TODO: make it use a template
-            # load content in buffer, previous content is deleted
-            ## for now, only content from first context is displayed:
-            content_main_ctx = keyword.data_set.get(context=keyword.current_context)
-            #self.help_buffer[1:] = content_main_ctx.info.splitlines()
-            content = content_main_ctx.info.splitlines()
-            self.app.template.template(content, header=header)
-        else:
-            # keyword doesn't exist, prepare buffer to be filled with user content
-            logger.debug("word: %s keyword: %s" %
-                         (word, keyword),
-                         extra={'className': strip(self.__class__)})
-
-            # write to buffer the small help text
-            #self.help_buffer[:] = utils.introduction_line(word).splitlines()
-            content = utils.introduction_line(word).splitlines()
-            self.app.template.template(content)
-            # .splitlines() is used because vim buffer accepts at most one "\n"
-            # per vim line
-            #keyword = utils.Keyword(name=word)     # conflicts with HelperSave
-            keyword = None
-        return keyword
-
     @staticmethod
     def get_active_buffer():
         """
@@ -636,7 +561,7 @@ class VimWrapper(object):
         """
         return vim.eval("winbufnr(0)")
 
-    def toggle_activate(self, cmd):
+    def toggle_activate(self, *cmds):
         """
         Activate/focus the helper buffer, run a cmd, and then activate/focus
         again the last used buffer.
@@ -646,7 +571,8 @@ class VimWrapper(object):
         # activate the buffer so we can do other operations on it
         vim.command("buffer! %s" % self.buffer_nr)
         # run our operations
-        vim.command(cmd)
+        for cmd in cmds:
+            vim.command(cmd)
         # make the old buffer active again
         vim.command("buffer! %s" % user_buf_nr)
 
