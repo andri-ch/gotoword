@@ -79,8 +79,11 @@ let g:gotoword_loaded = 1
 
 " define the highlight group
 hi GotowordLinks guibg=#33ff33 ctermbg=Cyan
-" define the syntax item
-"syntax match GotowordLinks /Ok\%4l\c\|Cancel\%4l\c\|Create context\%4l\c/
+" The syntax items that use this group are defined in python files.
+
+" 
+"noremap <buffer> <expr> <2-LeftMouse> Make_links()
+
 
 " --------------------------------
 " COMMANDS 
@@ -165,6 +168,7 @@ function! s:Help_buffer(...)
     " TODO: rename this function to Helper
     " fct name always starts with uppercase
     " s: means function is local to script, not part of the global namespace
+    " for details :help s:
   if a:0 == 2
     "echomsg "situation 1 or 3"
     let lines = getline(a:1, a:2)
@@ -350,15 +354,38 @@ function! s:Helper_word_contexts()
 endfunction
 
 
-function! Get_visual_selection()
-  " Why is this not a built-in Vim script function?!
-  let [lnum1, col1] = getpos("'<")[1:2]
-  let [lnum2, col2] = getpos("'>")[1:2]
-  let lines = getline(lnum1, lnum2)
-  let lines[-1] = lines[-1][: col2 - (&selection == 'inclusive' ? 1 : 2)]
-  let lines[0] = lines[0][col1 - 1:]
-  return join(lines, "\n")
-endfunction
+"function! s:Get_visual_selection()
+"  " Why is this not a built-in Vim script function?!
+"  let [lnum1, col1] = getpos("'<")[1:2]
+"  let [lnum2, col2] = getpos("'>")[1:2]
+"  let lines = getline(lnum1, lnum2)
+"  let lines[-1] = lines[-1][: col2 - (&selection == 'inclusive' ? 1 : 2)]
+"  let lines[0] = lines[0][col1 - 1:]
+"  return join(lines, "\n")
+"endfunction
+
+
+"function! g:Gotoword_make_links()
+"    " TODO: replace it with a python function (app._make_links)
+"    " Used to create the right side hand of a mapping. 
+"    " Eg, instead of 
+"    " :noremap <buffer> <2-LeftMouse> :Helper<cr>
+"    " one can do
+"    " :noremap <buffer> <expr> <2-LeftMouse> Gotoword_make_links()
+"    " See also *:map-expression*
+"  let word = expand("<cword>")
+""python <<EOF
+""#vim.command('let links = %s' % utils.create_vim_list(app.links))
+""EOF
+"
+"python <<EOF
+"word = vim.eval("word")
+"# because of this word expansion, links should be only one word...
+"# TODO: make links to be made of multiple words
+"if word in app.links:
+"    vim.command('Helper')
+"EOF
+"endfunction
 
 
 " MAIN 

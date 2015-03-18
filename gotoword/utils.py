@@ -211,7 +211,7 @@ def create_vim_list(values):
     values - a list of strings
     We need double quotes not single quotes to create a Vim list.
     Returns a string that is a properly written Vim list of strings.
-    This result can be fed to vim's eval function to create a list in vim.
+    This result can be fed to vim.eval() function to create a list in vim.
     """
 
     values_with_quotes = ('"' + elem + '"' for elem in values)
@@ -256,3 +256,4 @@ def create_vim_list(values):
 #        # make the old buffer active again
 #        vim.command("buffer! %s" % user_buf_nr)
 #    return wrapper_activate
+#

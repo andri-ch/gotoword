@@ -63,10 +63,10 @@ def custom_makeRecord(self, name, level, fn, lno, msg, args, exc_info, func=None
 
 
 def logger_as_decorator_factory(logger):
-    """Factory used to return a decorator that logs function call and
-    its return value.
+    """Factory used to return a decorator that logs function calls and
+    their return values.
     Useful when every module has its own logger, so this function is imported
-    from library and gets a per module logger.
+    from library and gets a logger for each module it is used in.
     Args:
     logger - logger used in the decorator to log events.
     Usage:
