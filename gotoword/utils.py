@@ -220,26 +220,6 @@ def create_vim_list(values):
     #return '[%s]' % ', '.join("\"%s\"" % elem for elem in values)
 
 
-#def toggle_readonly(f):
-#    """decorator used to set buffer options inside vim editor"""
-#    def wrapper_readonly(obj, *args, **kwargs):
-#        # if called repeatedly, remove readonly flag set by previous calls
-#        vim.command("set noreadonly")
-#        # the format of the log message below takes into account that this is a
-#        # wrapper only for __setitem__() methods that are found in a mapping
-#        # object; I probably should reformat this message
-#        logger.debug("obj: %s, index: %s , value: %s " % (obj, args[0], args[1]),
-#                     extra={'className': ''}
-#                     )
-#        res = f(obj, *args, **kwargs)
-#        vim.command("set readonly")
-#        # by setting buffer readonly, we want user to prevent from saving it
-#        # on harddisk with :w cmd, instead we want user to update the
-#        # database with HelperSave or HelperUpdate vim cmd
-#        return res
-#    return wrapper_readonly
-
-
 #def toggle_activate(f):
 #    """
 #    Activate/focus the helper buffer and then activate/focus again the last

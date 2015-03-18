@@ -95,7 +95,10 @@ class App(object):
         self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
         self.template = Template(self.vim_wrapper, App.help_buffer_name)
         links_observer = LinksObserver(self.template)
-        self.template.attach(links_observer)
+        self.template.attach_post(links_observer)
+        toggle_modifiable = ToggleModifiableObserver(self.template)
+        self.template.attach_pre(toggle_modifiable)
+        self.template.attach_post(toggle_modifiable)
 
     @log
     def helper(self, word):
@@ -224,7 +227,7 @@ class App(object):
         >>> names
         [u'canvas', u'color', u'line']
         '''
-        self.template.template(names)
+        self.template.template(names, modifiable=False)
         return names
 
     @log
@@ -239,7 +242,7 @@ class App(object):
         names = [ctx.name for ctx in utils.Context.objects.all()]
         #names.sort()
 
-        self.template.template(names)
+        self.template.template(names, modifiable=False)
         return names
 
     @log
@@ -258,7 +261,7 @@ class App(object):
         header = [
             "The following keywords have a meaning (definition) in '%s' "
             "context:" % context_obj.name]
-        self.template.template(words, header=header)
+        self.template.template(words, header=header, modifiable=False)
         return words
 
     @log
@@ -286,7 +289,7 @@ class App(object):
                 links.append(ctx.name)
 
             self.template.template(body, header, links,
-                                   syntax_group="GotowordLinks")
+                                   syntax_group="GotowordLinks", modifiable=False)
             # TODO: remove these 2 lines after you implemented autocmds for
             # :w instead of HelperSave
             #vim.command('au BufWinEnter <buffer=%s>  py app._clear_highlight_links("GotowordLinks")' % self.vim_wrapper.buffer_nr)
@@ -317,7 +320,10 @@ class App(object):
 class Template(object):
     """Displays/writes text to help buffer in Vim."""
     def __init__(self, vim_wrapper, buf_name):
-        self.observers = []
+        self.observers_pre = []
+        # observers_pre are called before template is changed
+        self.observers_post = []
+        # observers_post are called after template is changed
         self.vim_wrapper = vim_wrapper
         self.help_buffer_name = buf_name
         self.header = None
@@ -328,16 +334,33 @@ class Template(object):
         # considered links that will lead to other notes (like tags)
         self.syntax_group = None
         # words belonging to syntax_group will be highlighted as links
+        self.modifiable = True
+        # A user shouldn't be allowed to change the buffer after
+        # some helper_* methods are executed because they just display data;
+        # even if data is changed, it is not read back by the app, but it's
+        # more elegant not to let data to be modifiable.
+        # However, for no modifiable templates, there are 2 states:
+        # 1. modifiable = True -> template is displayed
+        # 2. modifiable = False -> buffer stays in this state until view is
+        # changed
 
-    def attach(self, observer):
-        self.observers.append(observer)
+    def attach_pre(self, observer):
+        self.observers_pre.append(observer)
 
-    def _update_observers(self):
-        for observer in self.observers:
-            observer()
+    def attach_post(self, observer):
+        self.observers_post.append(observer)
+
+    def _update_observers_pre(self):
+        for observer in self.observers_pre:
+            observer.pre()
+
+    def _update_observers_post(self):
+        for observer in self.observers_post:
+            observer.post()
 
     #def template(self, *args, **kwargs):
-    def template(self, body, header=None, links=[], syntax_group=None):
+    def template(self, body, header=None, links=[], syntax_group=None,
+                 modifiable=True):
         """Main method for this class. It chooses the template based on the
         arguments it gets.
         A template mimics the structure and functionality of an HTML document:
@@ -351,10 +374,14 @@ class Template(object):
         self.header = header
         self.links = links
         self.syntax_group = syntax_group
+        self.modifiable = modifiable
+
+        self._update_observers_pre()
         if header:
             self._template_with_header(body, header, links)
         else:
             self._template(body, links)
+        self._update_observers_post()
 
     def _template(self, body, links):
         """
@@ -365,7 +392,6 @@ class Template(object):
         """
         self.vim_wrapper.open_window(self.help_buffer_name, vim)
         self.vim_wrapper.help_buffer[:] = body
-        self._update_observers()
 
     def _template_with_header(self, body, header, links):
         """
@@ -380,7 +406,6 @@ class Template(object):
         self.vim_wrapper.open_window(self.help_buffer_name, vim)
         self.vim_wrapper.help_buffer[0:0] = header
         self.vim_wrapper.help_buffer[1:] = body
-        self._update_observers()
 
     def _make_links(self):
         """Calls Helper if word under cursor (<cword>) exists in links."""
@@ -410,8 +435,8 @@ class LinksObserver(object):
         self.syntax_group = None
         self.links = None
 
-    def __call__(self):
-        "it's called when template has changed from methods of self.template"
+    def post(self):
+        "It's called from methods of self.template when template has changed."
         #if self.current_template != self.template.name:
         #    # template has changed
         #    self.current_template = self.template.name
@@ -467,6 +492,33 @@ class LinksObserver(object):
         """
         command = 'syntax clear %s' % group
         self.template.vim_wrapper.toggle_activate(command)
+
+
+class ToggleModifiableObserver(object):
+    """Used to set/unset if a buffer is readonly. :help modifiable"""
+    def __init__(self, template):
+        self.template = template
+        #self.readonly = False
+
+    #def __call__(self):
+    #    if self.template.modifiable:
+    #        cmd = "set modifiable"
+    #    else:
+    #        cmd = "set nomodifiable"
+    #    self.template.vim_wrapper.toggle_activate(cmd)
+
+    def pre(self):
+        """Executed before the buffer contents (template) is changed. Useful
+        to toggle on/off buffer options like 'modifiable' so that template
+        can be changed."""
+        cmd = "set modifiable"
+        self.template.vim_wrapper.toggle_activate(cmd)
+
+    def post(self):
+        """Executed after the new template is displayed."""
+        if not self.template.modifiable:
+            cmd = "set nomodifiable"
+            self.template.vim_wrapper.toggle_activate(cmd)
 
 
 class VimWrapper(object):
