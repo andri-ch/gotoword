@@ -15,6 +15,7 @@ class Context(models.StandaloneModel):
     """
     class Meta:
         ordering = ['name']
+
     name = models.CharField("context name", max_length=50, unique=True)
     description = models.CharField("short description of context",
                                    max_length=100)
@@ -107,8 +108,10 @@ def load_keywords_store(database):
 
 def find_model_object(name, model=None):
     '''Searches the database for the word.
-    store - any model class, like Keyword, Context, etc.
-    word - any string
+    name - any string
+    model - any model class, like Keyword, Context, etc.
+
+    Returns the model instance or None.
     Eg.:
         find_model_object("canvas", Keyword)
         find_model_object("default", Context)

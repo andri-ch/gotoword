@@ -235,6 +235,7 @@ python << EOF
 #word = gotoword.vim.eval("word")
 word = gotoword.vim.eval("word")
 if type(word) == list:
+    # multiple rows have been selected; do we need to remove whitespaces?
     for i, line in enumerate(word):
         word[i] = line.strip()
 if len(word) == 1:
@@ -243,10 +244,12 @@ if len(word) == 1:
 else:
     pass
     # multiple lines should be used to extract context, etc.
+    # TODO: get the context of those lines by computing the weight of the 
+    # contexts the words in lines belong to
 #logger.debug("INPUT IS: %s" % type(word), extra={'className': ''})
 
-#app.keyword = app.vim_wrapper.update_buffer(word)
-app.keyword = app.helper(word)
+#app.keyword = app.helper(word)
+app.helper(word)
 EOF
 
   let g:loaded_Help_buffer = 1

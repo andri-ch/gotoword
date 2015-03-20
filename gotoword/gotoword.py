@@ -93,7 +93,7 @@ class App(object):
         """This is the main entry point of this script."""
         self.vim_wrapper = VimWrapper(app=self)
         self.vim_wrapper.setup_help_buffer(self.help_buffer_name)
-        self.template = Template(self.vim_wrapper, App.help_buffer_name)
+        self.template = Template(self, self.vim_wrapper, App.help_buffer_name)
         links_observer = LinksObserver(self.template)
         self.template.attach_post(links_observer)
         toggle_modifiable = ToggleModifiableObserver(self.template)
@@ -118,45 +118,75 @@ class App(object):
         self.word = word.lower()
 
         # look for keyword in DB
-        keyword = utils.find_model_object(self.word, utils.Keyword)
+        self.keyword = utils.find_model_object(self.word, utils.Keyword)
 
-        if keyword:
-            # get contexts this keyword belongs to (specific to ORM); it
-            # should be moved to utils
-            contexts = keyword.contexts.all()
+        if self.keyword:
+            contexts = self.keyword.contexts.all()
             ctx_names = [ctx.name for ctx in contexts]
-            #ctx_names.sort()
-            # TODO: keyword.current_context should be set by user if keyword
-            # has more contexts
-            keyword.current_context = contexts[0]
-            logger.debug("word: %s keyword: %s contexts: %s" %
-                         (word, keyword, ctx_names),
-                         extra={'className': strip(self.__class__)})
-            # TODO: is the title line removed when kw is updated?
-            # maybe it's best to write the content then insert at index 0 the
-            # title line, after a md5sum is made, and when reading data, check
-            # that title line hasn't changed by checking the md5sum again...
-            #self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
-            #                         (keyword.name, "; ".join(ctx_names))]
-            header = ['keyword: %s   contexts: %s' %
-                      (keyword.name, "; ".join(ctx_names))]
-            ## for now, only content from first context is displayed:
-            content_main_ctx = keyword.data_set.get(context=keyword.current_context)
-            body = content_main_ctx.info.splitlines()
-            # .splitlines() is used because vim buffer accepts at most one "\n"
-            # per vim line
-            self.template.template(body, header=header)
+            if len(contexts) == 1:
+                self.keyword.current_context = contexts[0]
+                logger.debug("word: %s keyword: %s contexts: %s" %
+                             (word, self.keyword, ctx_names),
+                             extra={'className': strip(self.__class__)})
+                # TODO: is the title line removed when kw is updated?
+                # maybe it's best to write the content then insert at index 0 the
+                # title line, after a md5sum is made, and when reading data, check
+                # that title line hasn't changed by checking the md5sum again...
+                #self.help_buffer[0:0] = ['keyword: %s   contexts: %s' %
+                #                         (keyword.name, "; ".join(ctx_names))]
+                self._helper(self.keyword)
+            else:
+                # kwd has definitions belonging to multiple contexts
+                self._kwd_multiple_contexts()
         else:
             # keyword doesn't exist, prepare buffer to be filled with user content
             logger.debug("word: %s keyword: %s" %
-                         (word, keyword),
+                         (word, self.keyword),
                          extra={'className': strip(self.__class__)})
 
             # write to buffer the small help text
             body = utils.introduction_line(word).splitlines()
             self.template.template(body)
-            keyword = None
-        return keyword
+            #self.keyword = None
+        return self.keyword
+
+    @log
+    def _helper(self, keyword):
+        """Complements helper(), displays info for kw by feeding header and
+        body to Template.template().
+        """
+        header = ['keyword: %s   context: %s' %
+                  (self.keyword.name,
+                   self.keyword.current_context.name)]
+
+        content_main_ctx = self.keyword.data_set.get(
+            context=self.keyword.current_context)
+        #content_main_ctx = self.keyword.data_set.get(context=contexts[0])
+        body = content_main_ctx.info.splitlines()
+        # .splitlines() is used because vim buffer accepts at most one "\n"
+        # per vim line
+        self.template.template(body, header=header)
+
+    @log
+    def _kwd_multiple_contexts(self):
+        if not hasattr(self.keyword, 'current_context'):
+            # user chooses the default one
+            #logger.debug("word: %s keyword: %s contexts: %s" %
+            #             (word, self.keyword, ctx_names),
+            #             extra={'className': strip(self.__class__)})
+            logger.debug('no current context for %s' %
+                         id(self.keyword), extra={'className': ''})
+            self.helper_word_contexts()
+        else:
+            # user has chosen the default one the last time this fct.
+            # was called
+            current_ctx = self.keyword.current_context.name
+            logger.debug('user chose current context %s' % current_ctx,
+                         extra={'className': ''})
+            #logger.debug("word: %s keyword: %s current_context: %s" %
+            #             (word, self.keyword, current_ctx),
+            #             extra={'className': strip(self.__class__)})
+            self._helper(self.keyword)
 
     @log
     def helper_save(self, context, test_answer):
@@ -286,7 +316,27 @@ class App(object):
                               relation.info_public)
                 one_line_definition = definition.split("\n", 1)[0]
                 body.extend([ctx.name, one_line_definition, "\n"])
-                links.append(ctx.name)
+
+                link = Link(ctx.name)
+
+                def action(instance, app, link_name):
+                    """Sets keyword.current_context to context whose name is
+                    link_name.
+                    """
+                    app.keyword.current_context = app.keyword.contexts.get(
+                        name=link_name)
+                    logger.debug('user chose current context for %s, %s' %
+                                 (id(self.keyword), app.keyword.current_context.name), extra={'className': ''})
+
+                link.action = action
+
+                def target(instance, app):
+                    """This is the function to be called when link is hit by
+                    user. Usually, target is specific to each link."""
+                    app._kwd_multiple_contexts()
+
+                link.target = target
+                links.append(link)
 
             self.template.template(body, header, links,
                                    syntax_group="GotowordLinks", modifiable=False)
@@ -319,19 +369,25 @@ class App(object):
 
 class Template(object):
     """Displays/writes text to help buffer in Vim."""
-    def __init__(self, vim_wrapper, buf_name):
+    def __init__(self, app, vim_wrapper, buf_name):
+        """app - parent app that uses the templates.
+           vim_wrapper - interface to Vim with some utility methods
+           buf_name - name of helper buffer opened in Vim
+        """
+        self.app = app
+        self.vim_wrapper = vim_wrapper
+        self.help_buffer_name = buf_name
         self.observers_pre = []
         # observers_pre are called before template is changed
         self.observers_post = []
         # observers_post are called after template is changed
-        self.vim_wrapper = vim_wrapper
-        self.help_buffer_name = buf_name
         self.header = None
         # header will be a list of strings that will be written to help buffer
         # to form the header lines
         self.links = []
-        # 'links' will store words that will be highlighted and will be
-        # considered links that will lead to other notes (like tags)
+        # 'links' will store words (link names) as keys, words will be
+        # highlighted, and the links' targets as values;
+        # links are words that will lead to other notes (like vim tags)
         self.syntax_group = None
         # words belonging to syntax_group will be highlighted as links
         self.modifiable = True
@@ -376,6 +432,7 @@ class Template(object):
         self.syntax_group = syntax_group
         self.modifiable = modifiable
 
+        # call observers before changing the template
         self._update_observers_pre()
         if header:
             self._template_with_header(body, header, links)
@@ -412,14 +469,55 @@ class Template(object):
         word = vim.eval('expand("<cword>")')
         # because of this word expansion, links should be only one word...
         # TODO: make links to be made of multiple words
-        if word in self.links:
-            vim.command('Helper')
+        #if word in self.links:
+            #self.app._action(word)
+            #vim.command(self.links[word])
+
+        link_names = [link.name for link in self.links]
+        logger.debug('no current context %s, names: %s' % (word, link_names),
+                     extra={'className': ''})
+        for link in self.links:
+            if word == link.name:
+                link.action(self, self.app, word)
+                link.target(self, self.app)
 
     def _disable_links(self):
         "Clear mapping for double LMB click in the helper buffer."
         unclickable = 'unmap <buffer> <2-LeftMouse>'
         not_enter = 'unmap <buffer> <CR>'
         self.vim_wrapper.toggle_activate(unclickable, not_enter)
+
+
+class Link(object):
+    """Mimics a web link. A link object has a target and an action.
+    name - text highlighted as link
+    action
+    Eg:
+        >>> back_link = Link("Back")
+        >>> forward_link = Link("Forward")
+        >>> def action():
+                print("do some stuff specific to link without which there's no"
+                      " point in calling 'target'")
+        >>> back_link.action = action
+        >>> def target():
+                print("call some function")
+        >>> back_link.target = target
+
+    """
+
+    def __init__(self, name):
+        self.name = name
+
+    def action(self, *args):
+        """Called before 'target' to set some attributes, call some methods
+        only if there's a need for extra work before calling 'target'. So
+        calling it is optional.
+        """
+        raise NotImplementedError
+
+    def target(self, *args):
+        "This is like 'href' in a hyperlink tag. Calls a new view."
+        raise NotImplementedError
 
 
 class LinksObserver(object):
@@ -483,7 +581,7 @@ class LinksObserver(object):
         """
         # TODO: does helper buffer need to be the current buffer?
         for link in links:
-            vim.command('syntax match %s /%s\c/' % (group, link))
+            vim.command('syntax match %s /%s\c/' % (group, link.name))
 
     def _clear_highlight_links(self, group):
         """Disables syntax highlighting for a group for the current buffer. Eg:
@@ -529,7 +627,6 @@ class VimWrapper(object):
     interface to a vim server, all commands and expressions are sent to it.
     """
     def __init__(self, app=None):
-        #self.app = app
         self.help_buffer = None
 
     #@log

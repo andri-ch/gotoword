@@ -253,8 +253,8 @@ class TestContext(unittest.TestCase):
 # run all tests:
 if __name__ == '__main__':          # when running as a script
     # test all functions
-    import doctest
-    doctest.testmod()
+    #import doctest
+    #doctest.testmod()
 
     print("Running tests...")
     ### load and run tests from other files ###
