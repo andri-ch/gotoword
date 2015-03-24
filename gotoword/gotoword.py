@@ -323,6 +323,9 @@ class App(object):
                     """Sets keyword.current_context to context whose name is
                     link_name.
                     """
+                    #TODO: it should be possible to call this function only
+                    # with supplied args, without the need for the calling
+                    # fct. to know which args to supply with...
                     app.keyword.current_context = app.keyword.contexts.get(
                         name=link_name)
                     logger.debug('user chose current context for %s, %s' %
@@ -513,6 +516,7 @@ class Link(object):
         only if there's a need for extra work before calling 'target'. So
         calling it is optional.
         """
+        # TODO: choose a better design pattern
         raise NotImplementedError
 
     def target(self, *args):
