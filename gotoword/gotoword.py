@@ -565,17 +565,17 @@ class LinksObserver(object):
         # words "click-able"
         # works only in the helper buffer (when it's active)
         # for debugging, <silent> is omitted
-        clickable = ('noremap <buffer> <2-LeftMouse> :python '
-                     'app.template._make_links()<CR>')
+        map_to_click = ('noremap <buffer> <2-LeftMouse> :python '
+                        'app.template._make_links()<CR>')
         #clickable = ('noremap <buffer> <silent> <2-LeftMouse> :python '
         #             'app.template._make_links()<CR>')
         # one can see existing key maps with
         # :verbose map <2-LeftMouse>
 
         # make links to respond to <Enter> too
-        enter = ('noremap <buffer> <CR> :python '
-                 'app.template._make_links()<CR>')
-        self.template.vim_wrapper.toggle_activate(clickable, enter)
+        map_to_enter = ('noremap <buffer> <CR> :python '
+                        'app.template._make_links()<CR>')
+        self.template.vim_wrapper.toggle_activate(map_to_click, map_to_enter)
 
     def _highlight_links(self, group, links):
         """Highlight the words which are considered links. In Vim, to define
