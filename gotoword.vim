@@ -169,6 +169,8 @@ function! s:Help_buffer(...)
     " fct name always starts with uppercase
     " s: means function is local to script, not part of the global namespace
     " for details :help s:
+    " it gets a word, a line or a block of lines as arguments
+    " it is not completely implemented
   if a:0 == 2
     "echomsg "situation 1 or 3"
     let lines = getline(a:1, a:2)

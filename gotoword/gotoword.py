@@ -86,6 +86,9 @@ class App(object):
         App.get_test_answer.
         """
         self.test_answers = {}
+        self.navigation_history = []
+        # it keeps track of which templates the user visited, it is similar to
+        # back/forward browser's navigation buttons
         logger.debug("app init", extra={'className': strip(self.__class__)})
 
     #@log
@@ -155,6 +158,7 @@ class App(object):
         """Complements helper(), displays info for kw by feeding header and
         body to Template.template().
         """
+        # TODO: this function should display the back/forward btns in issue38
         header = ['keyword: %s   context: %s' %
                   (self.keyword.name,
                    self.keyword.current_context.name)]
@@ -176,6 +180,7 @@ class App(object):
             #             extra={'className': strip(self.__class__)})
             logger.debug('no current context for %s' %
                          id(self.keyword), extra={'className': ''})
+            # why did I choose id(self.keyword) instead of self.keyword.name?
             self.helper_word_contexts()
         else:
             # user has chosen the default one the last time this fct.
@@ -341,7 +346,7 @@ class App(object):
                 link.target = target
                 links.append(link)
 
-            self.template.template(body, header, links,
+            self.template.template(body, header=header, links=links,
                                    syntax_group="GotowordLinks", modifiable=False)
             # TODO: remove these 2 lines after you implemented autocmds for
             # :w instead of HelperSave
@@ -368,6 +373,23 @@ class App(object):
         except IndexError:
             logger.debug("no more test answers left",
                          extra={'className': strip(obj.__class__)})
+
+
+def history(fn):
+    """used to capture and store the signature of the decorated function,
+    in order to implement back/forward buttons like functionality"""
+
+    def wrapper(template, *args, **kwargs):
+        template.app.navigation_history.append([(fn, template, args, kwargs)])
+        #if len(template.app.navigation_history) > 1:
+        #    # this has become obsolete
+        #    template.navigation_bar = True
+
+        fn(template, *args, **kwargs)
+        logger.debug('history %s' % (template.app.navigation_history),
+                     extra={'className': ''})
+
+    return wrapper
 
 
 class Template(object):
@@ -418,7 +440,8 @@ class Template(object):
             observer.post()
 
     #def template(self, *args, **kwargs):
-    def template(self, body, header=None, links=[], syntax_group=None,
+    @history
+    def template(self, body, header=[], links=[], syntax_group=None,
                  modifiable=True):
         """Main method for this class. It chooses the template based on the
         arguments it gets.
@@ -437,12 +460,11 @@ class Template(object):
 
         # call observers before changing the template
         self._update_observers_pre()
-        if header:
-            self._template_with_header(body, header, links)
-        else:
-            self._template(body, links)
+
+        self._template_with_header(body, header, links)
         self._update_observers_post()
 
+    # obsolete
     def _template(self, body, links):
         """
         Opens the help window and displays body in it.
@@ -453,19 +475,24 @@ class Template(object):
         self.vim_wrapper.open_window(self.help_buffer_name, vim)
         self.vim_wrapper.help_buffer[:] = body
 
-    def _template_with_header(self, body, header, links):
+    def _template_with_header(self, body, header=[], links=[]):
         """
         Opens the help window and displays a title/header line and the rest
         of the body.
         header - a list with one string; can be just a string if one uses
         help_buffer[0] = header, but help_buffer[0:0] = [header] is used in
-        accordance with help_buffer[1:3] = ['first line', 'second line']
+        accordance with help_buffer[1:2] = ['second line', 'third line']
 
         Returns nothing.
         """
         self.vim_wrapper.open_window(self.help_buffer_name, vim)
-        self.vim_wrapper.help_buffer[0:0] = header
-        self.vim_wrapper.help_buffer[1:] = body
+        # delete previous content:
+        self.vim_wrapper.help_buffer[:] = None
+        # navigation bar:
+        self.vim_wrapper.help_buffer[0:0] = ["Back     Forward"]
+        end_index = len(header)
+        self.vim_wrapper.help_buffer[1:end_index - 1] = header
+        self.vim_wrapper.help_buffer[1 + end_index:] = body
 
     def _make_links(self):
         """Calls Helper if word under cursor (<cword>) exists in links."""
