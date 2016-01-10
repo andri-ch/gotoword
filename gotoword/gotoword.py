@@ -2,6 +2,8 @@
 
 ### System libraries ###
 import logging
+import types
+# check out http://stackoverflow.com/questions/972/adding-a-method-to-an-existing-object-instance/2982#2982
 #import os.path
 #import threading
 #import time
@@ -158,7 +160,6 @@ class App(object):
         """Complements helper(), displays info for kw by feeding header and
         body to Template.template().
         """
-        # TODO: this function should display the back/forward btns in issue38
         header = ['keyword: %s   context: %s' %
                   (self.keyword.name,
                    self.keyword.current_context.name)]
@@ -179,7 +180,9 @@ class App(object):
             #             (word, self.keyword, ctx_names),
             #             extra={'className': strip(self.__class__)})
             logger.debug('no current context for %s' %
-                         id(self.keyword), extra={'className': ''})
+                         self.keyword.name, extra={'className': ''})
+            #logger.debug('no current context for %s' %
+            #             id(self.keyword), extra={'className': ''})
             # why did I choose id(self.keyword) instead of self.keyword.name?
             self.helper_word_contexts()
         else:
@@ -322,28 +325,27 @@ class App(object):
                 one_line_definition = definition.split("\n", 1)[0]
                 body.extend([ctx.name, one_line_definition, "\n"])
 
-                link = Link(ctx.name)
+                link = Link(ctx.name, self)
 
-                def action(instance, app, link_name):
+                def action(instance):
                     """Sets keyword.current_context to context whose name is
                     link_name.
                     """
-                    #TODO: it should be possible to call this function only
-                    # with supplied args, without the need for the calling
-                    # fct. to know which args to supply with...
-                    app.keyword.current_context = app.keyword.contexts.get(
-                        name=link_name)
+                    instance.app.keyword.current_context = \
+                        instance.app.keyword.contexts.get(name=instance.name)
                     logger.debug('user chose current context for %s, %s' %
-                                 (id(self.keyword), app.keyword.current_context.name), extra={'className': ''})
+                                 (id(self.keyword),
+                                  instance.app.keyword.current_context.name),
+                                 extra={'className': ''})
 
-                link.action = action
+                link.action = types.MethodType(action, link)
 
-                def target(instance, app):
+                def target(instance):
                     """This is the function to be called when link is hit by
                     user. Usually, target is specific to each link."""
-                    app._kwd_multiple_contexts()
+                    instance.app._kwd_multiple_contexts()
 
-                link.target = target
+                link.target = types.MethodType(target, link)
                 links.append(link)
 
             self.template.template(body, header=header, links=links,
@@ -489,13 +491,21 @@ class Template(object):
         # delete previous content:
         self.vim_wrapper.help_buffer[:] = None
         # navigation bar:
+        # TODO: activate nav bar with a call to self.template.template(); Eg:
+# self.template.template(body, header=header, links=links,
+#                                   syntax_group="GotowordLinks", modifiable=False)
         self.vim_wrapper.help_buffer[0:0] = ["Back     Forward"]
+        back = Link("Back", self.app)
+        # TODO: add action and target to each link
+        forward = Link("Forward", self.app)
+        self.links.extend([back, forward])
+
         end_index = len(header)
         self.vim_wrapper.help_buffer[1:end_index - 1] = header
         self.vim_wrapper.help_buffer[1 + end_index:] = body
 
     def _make_links(self):
-        """Calls Helper if word under cursor (<cword>) exists in links."""
+        """Calls Link methods if word under cursor (<cword>) exists in links."""
         word = vim.eval('expand("<cword>")')
         # because of this word expansion, links should be only one word...
         # TODO: make links to be made of multiple words
@@ -508,8 +518,8 @@ class Template(object):
                      extra={'className': ''})
         for link in self.links:
             if word == link.name:
-                link.action(self, self.app, word)
-                link.target(self, self.app)
+                link.action()
+                link.target()
 
     def _disable_links(self):
         "Clear mapping for double LMB click in the helper buffer."
@@ -523,8 +533,8 @@ class Link(object):
     name - text highlighted as link
     action
     Eg:
-        >>> back_link = Link("Back")
-        >>> forward_link = Link("Forward")
+        >>> back_link = Link("Back", app)
+        >>> forward_link = Link("Forward", app)
         >>> def action():
                 print("do some stuff specific to link without which there's no"
                       " point in calling 'target'")
@@ -535,8 +545,9 @@ class Link(object):
 
     """
 
-    def __init__(self, name):
+    def __init__(self, name, app):
         self.name = name
+        self.app = app
 
     def action(self, *args):
         """Called before 'target' to set some attributes, call some methods
