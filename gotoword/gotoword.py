@@ -338,6 +338,7 @@ class App(object):
                                   instance.app.keyword.current_context.name),
                                  extra={'className': ''})
 
+                # bind 'action' method to 'link' instance
                 link.action = types.MethodType(action, link)
 
                 def target(instance):
@@ -382,7 +383,9 @@ def history(fn):
     in order to implement back/forward buttons like functionality"""
 
     def wrapper(template, *args, **kwargs):
-        template.app.navigation_history.append([(fn, template, args, kwargs)])
+        #template.app.navigation_history.append([(fn, template, args, kwargs)])
+        #template.app.navigation_history.extend([(fn, template, args, kwargs)])
+        template.app.navigation_history.append((fn, template, args, kwargs))
         #if len(template.app.navigation_history) > 1:
         #    # this has become obsolete
         #    template.navigation_bar = True
@@ -460,22 +463,71 @@ class Template(object):
         self.syntax_group = syntax_group
         self.modifiable = modifiable
 
+        # implement Back/Forward navigation according to
+        # http://stackoverflow.com/questions/6869476/how-to-implement-back-and-forward-functionality-like-browser
+
+        # when stacks are empty, disable the Back/Forward buttons
+        self.back_stack, self.forward_stack = [], []
+        self.current_page = self.app.navigation_history.pop()
+
+        def navigate(link):
+            self.current_page = link
+
+        def link_clicked(link):
+            self.back_stack.append(self.current_page)
+            self.forward_stack = []
+            navigate(link)
+
+        def go_back():
+            self.forward_stack.append(self.current_page)
+            navigate(self.back_stack.pop())
+
+        def go_forward():
+            self.back_stack.append(self.current_page)
+            navigate(self.forward_stack.pop())
+
+        if not "Back" in [l.name for l in self.links]:
+            # this is a snippet of a nav bar, maybe it shouldn't be here
+            back = Link("Back", self.app)
+
+            def go_back(instance):
+                #.app.navigation_history.append([(fn, template, args, kwargs)])
+                self.forward_stack.append(self.current_page())
+                fn, template, args, kwargs = self.app.navigation_history[-2]
+                # TODO: -2 is not good, when pressed for the first time it
+                # throws out of index error -> someone should keep track of the
+                # index
+                fn(template, *args, **kwargs)
+                logger.debug('Back %s %s %s' % (template, args, kwargs),
+                             extra={'className': ''})
+                # TODO: add log messages to target to debug the below error
+                #fn(args, kwargs)
+
+            back.target = types.MethodType(target, back)
+
+            # TODO: add action and target to each link
+            forward = Link("Forward", self.app)
+
+            def target(instance):
+                #.app.navigation_history.append([(fn, template, args, kwargs)])
+                self.back_stack.append(self.forward_stack.pop())
+                fn, template, args, kwargs = self.app.navigation_history[-1]
+                # TODO: -2 is not good, when pressed for the first time it
+                # throws out of index error -> someone should keep track of the
+                # index
+                fn(template, *args, **kwargs)
+
+            forward.target = types.MethodType(target, forward)
+            self.links.extend([back, forward])
+
+        # this makes all links in the template have other color
+        self.syntax_group = "GotowordLinks"
+
         # call observers before changing the template
         self._update_observers_pre()
 
         self._template_with_header(body, header, links)
         self._update_observers_post()
-
-    # obsolete
-    def _template(self, body, links):
-        """
-        Opens the help window and displays body in it.
-        body - a list of strings
-
-        Returns nothing.
-        """
-        self.vim_wrapper.open_window(self.help_buffer_name, vim)
-        self.vim_wrapper.help_buffer[:] = body
 
     def _template_with_header(self, body, header=[], links=[]):
         """
@@ -495,10 +547,10 @@ class Template(object):
 # self.template.template(body, header=header, links=links,
 #                                   syntax_group="GotowordLinks", modifiable=False)
         self.vim_wrapper.help_buffer[0:0] = ["Back     Forward"]
-        back = Link("Back", self.app)
-        # TODO: add action and target to each link
-        forward = Link("Forward", self.app)
-        self.links.extend([back, forward])
+        #back = Link("Back", self.app)
+        ## TODO: add action and target to each link
+        #forward = Link("Forward", self.app)
+        #self.links.extend([back, forward])
 
         end_index = len(header)
         self.vim_wrapper.help_buffer[1:end_index - 1] = header
@@ -555,11 +607,13 @@ class Link(object):
         calling it is optional.
         """
         # TODO: choose a better design pattern
-        raise NotImplementedError
+        #raise NotImplementedError
+        return NotImplemented
 
     def target(self, *args):
         "This is like 'href' in a hyperlink tag. Calls a new view."
-        raise NotImplementedError
+        #raise NotImplementedError
+        return NotImplemented
 
 
 class LinksObserver(object):
