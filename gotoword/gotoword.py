@@ -325,7 +325,7 @@ class App(object):
                 one_line_definition = definition.split("\n", 1)[0]
                 body.extend([ctx.name, one_line_definition, "\n"])
 
-                link = Link(ctx.name, self)
+                link = Link(ctx.name, None, self)
 
                 def action(instance):
                     """Sets keyword.current_context to context whose name is
@@ -385,14 +385,15 @@ def history(fn):
     def wrapper(template, *args, **kwargs):
         #template.app.navigation_history.append([(fn, template, args, kwargs)])
         #template.app.navigation_history.extend([(fn, template, args, kwargs)])
-        template.app.navigation_history.append((fn, template, args, kwargs))
+        #template.app.navigation_history.append((fn, template, args, kwargs))
+        template.current_page = (fn, template, args, kwargs)
         #if len(template.app.navigation_history) > 1:
         #    # this has become obsolete
         #    template.navigation_bar = True
 
         fn(template, *args, **kwargs)
-        logger.debug('history %s' % (template.app.navigation_history),
-                     extra={'className': ''})
+        #logger.debug('history %s' % (template.app.navigation_history),
+        #             extra={'className': ''})
 
     return wrapper
 
@@ -429,6 +430,10 @@ class Template(object):
         # 1. modifiable = True -> template is displayed
         # 2. modifiable = False -> buffer stays in this state until view is
         # changed
+
+        # Obs: when stacks are empty, disable the Back/Forward buttons
+        self.back_stack, self.forward_stack = [], []
+        self.current_page = None
 
     def attach_pre(self, observer):
         self.observers_pre.append(observer)
@@ -467,57 +472,12 @@ class Template(object):
         # http://stackoverflow.com/questions/6869476/how-to-implement-back-and-forward-functionality-like-browser
 
         # when stacks are empty, disable the Back/Forward buttons
-        self.back_stack, self.forward_stack = [], []
-        self.current_page = self.app.navigation_history.pop()
+        # self.back_stack, self.forward_stack = [], []
 
-        def navigate(link):
-            self.current_page = link
-
-        def link_clicked(link):
-            self.back_stack.append(self.current_page)
-            self.forward_stack = []
-            navigate(link)
-
-        def go_back():
-            self.forward_stack.append(self.current_page)
-            navigate(self.back_stack.pop())
-
-        def go_forward():
-            self.back_stack.append(self.current_page)
-            navigate(self.forward_stack.pop())
-
-        if not "Back" in [l.name for l in self.links]:
+        if not "back" in [l.name.lower() for l in self.links]:
             # this is a snippet of a nav bar, maybe it shouldn't be here
-            back = Link("Back", self.app)
-
-            def go_back(instance):
-                #.app.navigation_history.append([(fn, template, args, kwargs)])
-                self.forward_stack.append(self.current_page())
-                fn, template, args, kwargs = self.app.navigation_history[-2]
-                # TODO: -2 is not good, when pressed for the first time it
-                # throws out of index error -> someone should keep track of the
-                # index
-                fn(template, *args, **kwargs)
-                logger.debug('Back %s %s %s' % (template, args, kwargs),
-                             extra={'className': ''})
-                # TODO: add log messages to target to debug the below error
-                #fn(args, kwargs)
-
-            back.target = types.MethodType(target, back)
-
-            # TODO: add action and target to each link
-            forward = Link("Forward", self.app)
-
-            def target(instance):
-                #.app.navigation_history.append([(fn, template, args, kwargs)])
-                self.back_stack.append(self.forward_stack.pop())
-                fn, template, args, kwargs = self.app.navigation_history[-1]
-                # TODO: -2 is not good, when pressed for the first time it
-                # throws out of index error -> someone should keep track of the
-                # index
-                fn(template, *args, **kwargs)
-
-            forward.target = types.MethodType(target, forward)
+            back = BackButton("Back", None, self.app)
+            forward = ForwardButton("Forward", None, self.app)
             self.links.extend([back, forward])
 
         # this makes all links in the template have other color
@@ -547,10 +507,6 @@ class Template(object):
 # self.template.template(body, header=header, links=links,
 #                                   syntax_group="GotowordLinks", modifiable=False)
         self.vim_wrapper.help_buffer[0:0] = ["Back     Forward"]
-        #back = Link("Back", self.app)
-        ## TODO: add action and target to each link
-        #forward = Link("Forward", self.app)
-        #self.links.extend([back, forward])
 
         end_index = len(header)
         self.vim_wrapper.help_buffer[1:end_index - 1] = header
@@ -559,19 +515,25 @@ class Template(object):
     def _make_links(self):
         """Calls Link methods if word under cursor (<cword>) exists in links."""
         word = vim.eval('expand("<cword>")')
+        word = word.lower()
         # because of this word expansion, links should be only one word...
         # TODO: make links to be made of multiple words
         #if word in self.links:
             #self.app._action(word)
             #vim.command(self.links[word])
 
-        link_names = [link.name for link in self.links]
-        logger.debug('no current context %s, names: %s' % (word, link_names),
-                     extra={'className': ''})
         for link in self.links:
-            if word == link.name:
+            if word.lower() == link.name.lower():
+                link.link_clicked()
                 link.action()
                 link.target()
+
+        link_names = [link.name.lower() for link in self.links]
+        logger.debug('no current context %s, names: %s' % (word, link_names),
+                     extra={'className': ''})
+        logger.debug("back_stack %s\n forward_stack: %s\n" %
+                     (self.back_stack, self.forward_stack),
+                     extra={'className': ''})
 
     def _disable_links(self):
         "Clear mapping for double LMB click in the helper buffer."
@@ -597,9 +559,11 @@ class Link(object):
 
     """
 
-    def __init__(self, name, app):
+    def __init__(self, name, value, app):
         self.name = name
+        self.link = value
         self.app = app
+        self.template = self.app.template
 
     def action(self, *args):
         """Called before 'target' to set some attributes, call some methods
@@ -614,6 +578,45 @@ class Link(object):
         "This is like 'href' in a hyperlink tag. Calls a new view."
         #raise NotImplementedError
         return NotImplemented
+
+    def link_clicked(self):
+        self.template.back_stack.append(self.template.current_page)
+        logger.debug('back_stack: %s' % self.template.back_stack,
+                     extra={'className': ''})
+        self.template.forward_stack = []
+
+
+class NavigationButton(Link):
+    def link_clicked(self):
+        pass
+
+    def target(self):
+        fn, template, args, kwargs = self.link
+        fn(template, *args, **kwargs)
+        logger.debug('Navigate to %s %s %s' % (template, args, kwargs),
+                     extra={'className': ''})
+
+
+class BackButton(NavigationButton):
+    def action(self):
+        self.template.forward_stack.append(self.template.current_page)
+        try:
+            self.link = self.template.back_stack.pop()
+        except IndexError:
+            pass
+        logger.debug('back_button: %s' % self.name,
+                     extra={'className': ''})
+
+
+class ForwardButton(NavigationButton):
+    def action(self):
+        self.template.back_stack.append(self.template.current_page)
+        try:
+            self.link = self.template.forward_stack.pop()
+        except IndexError:
+            pass
+        logger.debug('forward_button: %s' % self.name,
+                     extra={'className': ''})
 
 
 class LinksObserver(object):
@@ -631,6 +634,9 @@ class LinksObserver(object):
 
     def post(self):
         "It's called from methods of self.template when template has changed."
+        # TODO: the description string of this method doesn't state what this
+        # method does!
+
         #if self.current_template != self.template.name:
         #    # template has changed
         #    self.current_template = self.template.name
