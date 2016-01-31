@@ -383,7 +383,7 @@ def history(fn):
     in order to implement back/forward buttons like functionality"""
 
     def wrapper(template, *args, **kwargs):
-        # ignore first time call to template.template
+        # ignore first time call to template.template and navigation buttons
         if template.current_page and not template.navigation:
             template.link_clicked()
         template.current_page = (fn, template, args, kwargs)
@@ -591,6 +591,7 @@ class Link(object):
 class NavigationButton(Link):
     def target(self):
         fn, template, args, kwargs = self.link
+        # the following line skips @history and thus the navigation history
         #fn(template, *args, **kwargs)
         template.template(*args, **kwargs)
         template.navigation = False
