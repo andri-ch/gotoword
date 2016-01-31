@@ -3,6 +3,7 @@
 #!/usr/bin/python
 
 """
+Docstring is DEPRECATED:
 This file contains functional tests for "gotoword" python app.
 It uses pytest python module, not the default unittest, because in python 2.x
 it is more difficult to run and organize functional tests.
@@ -565,8 +566,9 @@ class TestGotoword(unittest.TestCase):
         # from DB table
         ctx = utils.Context.objects.get(name=context)
         # compare the two numbers
-        assert (len(ctx.keyword_set.all()) == len(ctx_words.split("\n")) - 1)
-        # len(lines) - 1 because we omit the title line
+        assert (len(ctx.keyword_set.all()) == len(ctx_words.split("\n")) - 2)
+        # len(lines) - 2 because we omit the navigation btns line and the
+        # title line
 
     ### other utilitary functions ###
     #################################
@@ -636,7 +638,7 @@ class TestGotoword(unittest.TestCase):
         #time.sleep(0.5)
 
         # check if definition informs user that word doesn't exist in database
-        info = self.client.eval('getbufline(%s, 1)' % buffer_index)
+        info = self.client.eval('getbufline(%s, 1, 2)' % buffer_index)
         assert ('"%s" doesn\'t exist' % kword in info)
 
         # note that cursor is positioned on kword word located previously in
