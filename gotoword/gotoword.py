@@ -383,17 +383,13 @@ def history(fn):
     in order to implement back/forward buttons like functionality"""
 
     def wrapper(template, *args, **kwargs):
-        #template.app.navigation_history.append([(fn, template, args, kwargs)])
-        #template.app.navigation_history.extend([(fn, template, args, kwargs)])
-        #template.app.navigation_history.append((fn, template, args, kwargs))
+        # ignore first time call to template.template
+        if template.current_page and not template.navigation:
+            template.link_clicked()
         template.current_page = (fn, template, args, kwargs)
-        #if len(template.app.navigation_history) > 1:
-        #    # this has become obsolete
-        #    template.navigation_bar = True
-
         fn(template, *args, **kwargs)
-        #logger.debug('history %s' % (template.app.navigation_history),
-        #             extra={'className': ''})
+        logger.debug('current_page: %s %s %s' % (template, args, kwargs),
+                     extra={'className': ''})
 
     return wrapper
 
@@ -434,6 +430,9 @@ class Template(object):
         # Obs: when stacks are empty, disable the Back/Forward buttons
         self.back_stack, self.forward_stack = [], []
         self.current_page = None
+        self.navigation = False
+        # navigation indicates if template/view will change as a result of a
+        # click on back/forward buttons
 
     def attach_pre(self, observer):
         self.observers_pre.append(observer)
@@ -463,6 +462,8 @@ class Template(object):
         >>> t = Template(wrapper, buf_name)
         >>> t.template(body, header, links)
         """
+        #self.current_page = (fn, self, args, kwargs)
+
         self.header = header
         self.links = links
         self.syntax_group = syntax_group
@@ -512,6 +513,13 @@ class Template(object):
         self.vim_wrapper.help_buffer[1:end_index - 1] = header
         self.vim_wrapper.help_buffer[1 + end_index:] = body
 
+    def link_clicked(self):
+        "Used by links, but should be not used with navigation buttons."
+        self.back_stack.append(self.current_page)
+        self.forward_stack = []
+        logger.debug('back_stack: %s' % self.back_stack,
+                     extra={'className': ''})
+
     def _make_links(self):
         """Calls Link methods if word under cursor (<cword>) exists in links."""
         word = vim.eval('expand("<cword>")')
@@ -524,7 +532,7 @@ class Template(object):
 
         for link in self.links:
             if word.lower() == link.name.lower():
-                link.link_clicked()
+                #link.link_clicked()
                 link.action()
                 link.target()
 
@@ -579,20 +587,13 @@ class Link(object):
         #raise NotImplementedError
         return NotImplemented
 
-    def link_clicked(self):
-        self.template.back_stack.append(self.template.current_page)
-        logger.debug('back_stack: %s' % self.template.back_stack,
-                     extra={'className': ''})
-        self.template.forward_stack = []
-
 
 class NavigationButton(Link):
-    def link_clicked(self):
-        pass
-
     def target(self):
         fn, template, args, kwargs = self.link
-        fn(template, *args, **kwargs)
+        #fn(template, *args, **kwargs)
+        template.template(*args, **kwargs)
+        template.navigation = False
         logger.debug('Navigate to %s %s %s' % (template, args, kwargs),
                      extra={'className': ''})
 
@@ -600,10 +601,13 @@ class NavigationButton(Link):
 class BackButton(NavigationButton):
     def action(self):
         self.template.forward_stack.append(self.template.current_page)
-        try:
-            self.link = self.template.back_stack.pop()
-        except IndexError:
-            pass
+        #try:
+        #    self.link = self.template.back_stack.pop()
+        #except IndexError:
+        #    # even if stack is empty, _make_links will call target() too
+        #    pass
+        self.link = self.template.back_stack.pop()
+        self.template.navigation = True
         logger.debug('back_button: %s' % self.name,
                      extra={'className': ''})
 
@@ -611,10 +615,12 @@ class BackButton(NavigationButton):
 class ForwardButton(NavigationButton):
     def action(self):
         self.template.back_stack.append(self.template.current_page)
-        try:
-            self.link = self.template.forward_stack.pop()
-        except IndexError:
-            pass
+        #try:
+        #    self.link = self.template.forward_stack.pop()
+        #except IndexError:
+        #    pass
+        self.link = self.template.forward_stack.pop()
+        self.template.navigation = True
         logger.debug('forward_button: %s' % self.name,
                      extra={'className': ''})
 
