@@ -84,6 +84,7 @@ hi GotowordLinks guibg=#33ff33 ctermbg=Cyan
 " 
 "noremap <buffer> <expr> <2-LeftMouse> Make_links()
 
+set wildmenu
 
 " --------------------------------
 " COMMANDS 
