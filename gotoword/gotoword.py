@@ -1047,7 +1047,8 @@ class UpdateKeywordState(object):
         current_context = kw.current_context
         utils.update_keyword(kw, current_context,
                              app.vim_wrapper.help_buffer)
-        vim.command('echomsg "Info field of keyword \"%s\" updated"' % kw.name)
+        vim.command('echomsg "Info field of keyword %s updated"' % kw.name)
+        #vim.command('echomsg "Info field of keyword \"%s\" updated"' % kw.name)
         return None
 
 
